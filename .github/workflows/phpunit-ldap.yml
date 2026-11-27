@@ -3,10 +3,12 @@ name: OpenLDAP Integration Tests
 on:
   pull_request:
     branches:
+      - develop
       - main
     paths:
       - 'src/Authentication/LDAP/**'
       - 'src/Exceptions/LDAPException.php'
+      - 'src/Exceptions/LDAPReason.php'
       - 'src/Language/en/ShieldLDAP.php'
       - 'tests/Authentication/LDAP/**'
       - 'tests/_support/LDAP/**'
@@ -16,10 +18,12 @@ on:
       - '.github/workflows/phpunit-ldap.yml'
   push:
     branches:
+      - develop
       - main
     paths:
       - 'src/Authentication/LDAP/**'
       - 'src/Exceptions/LDAPException.php'
+      - 'src/Exceptions/LDAPReason.php'
       - 'src/Language/en/ShieldLDAP.php'
       - 'tests/Authentication/LDAP/**'
       - 'tests/_support/LDAP/**'

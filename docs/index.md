@@ -6,7 +6,7 @@ or StartTLS and completes sign-in through Shield's session and login actions.
 
 Run `composer show maniaba/shield-ldap` in your application to find its installed
 version. Use the version selector in the header to find the guide for that release.
-Select **Development** if you installed `dev-main`.
+Select **Development** if you installed `dev-develop`.
 
 ## Getting Started
 

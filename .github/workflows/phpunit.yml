@@ -3,17 +3,21 @@ name: PHPUnit
 on:
   pull_request:
     branches:
+      - develop
       - main
     paths:
       - '**.php'
+      - '**.inc'
       - 'composer.json'
       - 'phpunit.dist.xml'
       - '.github/workflows/phpunit.yml'
   push:
     branches:
+      - develop
       - main
     paths:
       - '**.php'
+      - '**.inc'
       - 'composer.json'
       - 'phpunit.dist.xml'
       - '.github/workflows/phpunit.yml'
