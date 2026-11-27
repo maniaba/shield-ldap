@@ -22,7 +22,7 @@ use SensitiveParameter;
  *
  * @phpstan-type DirectoryEntry array{dn: string, attributes: array<string, list<string>>}
  */
-final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAPUserLookupInterface
+final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAPUserLookupInterface, LDAPUserEnumerationInterface
 {
     private const TIME_LIMIT_EXCEEDED = 3;
     private const SIZE_LIMIT_EXCEEDED = 4;
@@ -31,6 +31,8 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
     private const NO_SUCH_OBJECT      = 32;
     private const INVALID_CREDENTIALS = 49;
     private const UNAVAILABLE         = 52;
+    private const MAX_SCAN_PAGE_SIZE  = 1_000;
+    private const MAX_SCAN_PAGES      = 10_000;
 
     // OpenLDAP client-side result codes are not exposed by ext-ldap.
     private const SERVER_DOWN   = -1;
@@ -121,6 +123,53 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
             $eligibility = $this->eligibleEntryFilter($connection, $entry, $filter, $eligibilityFilter);
 
             return $this->readEligibleEntry($ldap, $connection, $entry, $eligibility, $attributes);
+        } finally {
+            ldap_unbind($ldap);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function scanUsers(LDAPConnection $connection, int $pageSize = 100): iterable
+    {
+        if (! $connection->verifyCertificate) {
+            throw new LDAPException('tls_verification_required');
+        }
+
+        if ($pageSize < 1 || $pageSize > self::MAX_SCAN_PAGE_SIZE) {
+            throw new LDAPException('invalid_search_limit');
+        }
+
+        if (extension_loaded('ldap') && ! defined('LDAP_CONTROL_PAGEDRESULTS')) {
+            throw new LDAPException('unsupported_ldap_client');
+        }
+
+        $baseDn     = $connection->userBaseDn ?? $connection->baseDn;
+        $filter     = LDAPFilter::all($connection->loginFilter, $connection->eligibilityFilter);
+        $attributes = array_values(array_unique([$connection->externalIdAttribute, ...array_values($connection->profileAttributes)]));
+        $this->validateSearch($baseDn, $filter, $attributes);
+
+        $ldap = $this->open($connection, true);
+
+        try {
+            $pagesRemaining = self::MAX_SCAN_PAGES;
+
+            foreach ((array) $baseDn as $base) {
+                $cookie = '';
+
+                do {
+                    if ($pagesRemaining === 0) {
+                        throw new LDAPException('incomplete_search');
+                    }
+
+                    $pagesRemaining--;
+
+                    foreach ($this->search($ldap, $connection, $base, $filter, $attributes, $pageSize, pageCookie: $cookie) as $entry) {
+                        yield $entry;
+                    }
+                } while ($cookie !== '');
+            }
         } finally {
             ldap_unbind($ldap);
         }
@@ -350,10 +399,17 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
         array $attributes,
         int $limit,
         bool $baseOnly = false,
+        ?string &$pageCookie = null,
     ): array {
         $attributes = $attributes === [] ? ['1.1'] : array_values(array_unique($attributes, SORT_STRING));
         $search     = $baseOnly ? ldap_read(...) : ldap_search(...);
-        $result     = @$search($ldap, $baseDn, $filter, $attributes, 0, $limit, $connection->searchTimeout);
+        $paged      = $pageCookie !== null;
+        $controls   = $paged ? [[
+            'oid'        => LDAP_CONTROL_PAGEDRESULTS,
+            'iscritical' => true,
+            'value'      => ['size' => $limit, 'cookie' => $pageCookie],
+        ]] : null;
+        $result = @$search($ldap, $baseDn, $filter, $attributes, 0, $paged ? 0 : $limit, $connection->searchTimeout, LDAP_DEREF_NEVER, $controls);
 
         if ($result === false) {
             $code = ldap_errno($ldap);
@@ -365,16 +421,29 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
             throw new LDAPException($this->searchFailure($ldap, $code));
         }
 
-        if (! @ldap_parse_result($ldap, $result, $code) || ldap_first_reference($ldap, $result) !== false) {
+        $parsed = $paged
+            ? @ldap_parse_result($ldap, $result, $code, $matchedDn, $message, $referrals, $responseControls)
+            : @ldap_parse_result($ldap, $result, $code);
+
+        if (! $parsed || ldap_first_reference($ldap, $result) !== false || ($paged && $referrals !== [])) {
             throw new LDAPException('incomplete_search');
         }
 
         // Only accept the client-side size boundary when we actually received
         // that many entries. A partial user search cannot establish uniqueness.
         if ($code !== 0
-            && ($code !== self::SIZE_LIMIT_EXCEEDED || ldap_count_entries($ldap, $result) !== $limit)
+            && ($paged || $code !== self::SIZE_LIMIT_EXCEEDED || ldap_count_entries($ldap, $result) !== $limit)
         ) {
             throw new LDAPException($this->searchFailure($ldap, $code));
+        }
+
+        if ($paged) {
+            $cookie = $responseControls[LDAP_CONTROL_PAGEDRESULTS]['value']['cookie'] ?? null;
+            if (! is_string($cookie) || ldap_count_entries($ldap, $result) > $limit) {
+                throw new LDAPException('incomplete_search');
+            }
+
+            $pageCookie = $cookie;
         }
 
         $entries = [];

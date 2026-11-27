@@ -215,23 +215,10 @@ class LDAP extends Session
             $connection->eligibilityFilter,
         );
 
-        $externalId = LDAPUserResolver::externalId($connection, $entry['attributes']);
-        $profile    = [];
-
-        foreach ($connection->profileAttributes as $field => $attribute) {
-            $values = $entry['attributes'][strtolower($attribute)] ?? [];
-
-            if (count($values) === 1) {
-                $profile[$field] = $values[0];
-            } elseif ($values !== []) {
-                throw new LDAPException('invalid_profile');
-            }
-        }
-
         return $this->resolver->resolve(
             $connection->id,
-            $externalId,
-            $profile,
+            LDAPUserResolver::externalId($connection, $entry['attributes']),
+            LDAPUserResolver::profile($connection, $entry['attributes']),
             $connection->provisionUsers,
             $connection->updateProfile,
         );

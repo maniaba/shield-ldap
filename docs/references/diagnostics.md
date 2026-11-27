@@ -149,3 +149,13 @@ same immutable identity against the eligibility filter. Return the entry DN
 and the requested attribute values using lowercase keys and lists of strings.
 Throw `LDAPException` with a reason code instead of passing native exceptions
 or credentials to the application.
+
+To support `shield:ldap-sync`, also implement
+`Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserEnumerationInterface`. Its
+`scanUsers(LDAPConnection $connection, int $pageSize = 100): iterable` method
+yields users matching `loginFilter` and `eligibilityFilter` from all effective
+user search bases. Use the service account over verified TLS. Yield entries
+with a `dn` and an `attributes` map of lowercase attribute names to lists of
+strings. Include the configured immutable ID and mapped profile attributes.
+Throw `LDAPException` if the scan is incomplete.
+[Synchronizing Users from LDAP](../guides/user_management.md#synchronizing-users-from-ldap)

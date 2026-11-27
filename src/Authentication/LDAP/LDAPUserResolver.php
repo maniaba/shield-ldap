@@ -58,56 +58,56 @@ final readonly class LDAPUserResolver
         $profile = $this->validateProfile($profile);
 
         return $this->atomically(function () use ($connectionId, $key, $profile, $provision, $updateProfile): User {
-            $identity = $this->identities->getIdentityBySecret(self::ID_TYPE, $key);
-
-            if ($identity === null) {
-                if (! $provision) {
-                    throw new LDAPException('user_not_provisioned');
-                }
-
-                $username = $profile['username'] ?? null;
-                if ($username === null) {
-                    throw new LDAPException('invalid_profile');
-                }
-
-                $this->checkUsername($username);
-
-                $userId = $this->users->insert($profile);
-                if ($userId === true) {
-                    throw new LDAPException('synchronization_conflict');
-                }
-
-                $user = $this->readBackProfile($userId, $profile);
-                $this->createIdentity($connectionId, $key, $userId);
-
-                return $user;
+            $plan = $this->plan($key, $profile, $provision, $updateProfile);
+            if ($plan['user'] === null && $plan['status'] === 'skipped') {
+                throw new LDAPException('user_not_provisioned');
             }
 
-            $user = $this->findUser($identity->user_id);
-            if (! $updateProfile || $user->isBanned() || ! $user->isActivated()) {
-                return $user;
-            }
-
-            $stored = $user->toRawArray();
-
-            foreach ($profile as $field => $value) {
-                if (array_key_exists($field, $stored) && $stored[$field] === $value) {
-                    unset($profile[$field]);
-                }
-            }
-
-            if ($profile === []) {
-                return $user;
-            }
-
-            if (isset($profile['username'])) {
-                $this->checkUsername($profile['username'], $identity->user_id);
-            }
-
-            $this->users->update($identity->user_id, $profile);
-
-            return $this->readBackProfile($identity->user_id, $profile);
+            return $this->saveProfile($connectionId, $key, $plan['user'], $plan['changes']);
         });
+    }
+
+    /**
+     * Preview or apply the synchronization of an eligible, service-account-verified directory entry.
+     *
+     * @param array<string, string|null>   $profile
+     * @param array<array-key, int|string> $localAccounts
+     *
+     * @return 'create'|'skipped'|'unchanged'|'update'
+     */
+    public function synchronize(
+        LDAPConnection $connection,
+        string $externalId,
+        array $profile,
+        array $localAccounts,
+        bool $apply,
+    ): string {
+        $key     = $this->identityKey($connection->id, $externalId);
+        $profile = $this->validateProfile($profile);
+
+        $operation = function () use ($connection, $key, $profile, $localAccounts, $apply): string {
+            $plan = $this->plan($key, $profile, $connection->provisionUsers, $connection->updateProfile, $localAccounts);
+            if ($plan['changes'] !== []) {
+                $this->checkWritableFields($plan['changes']);
+                if ($apply) {
+                    $this->saveProfile($connection->id, $key, $plan['user'], $plan['changes']);
+                }
+            }
+
+            return $plan['status'];
+        };
+
+        if ($apply) {
+            return $this->atomically($operation);
+        }
+
+        try {
+            return $operation();
+        } catch (LDAPException $e) {
+            throw $e;
+        } catch (Throwable) {
+            throw new LDAPException('synchronization_conflict');
+        }
     }
 
     /**
@@ -236,6 +236,32 @@ final readonly class LDAPUserResolver
     }
 
     /**
+     * Map present, single-valued directory attributes to local profile fields.
+     *
+     * @param array<string, list<string>> $attributes
+     *
+     * @return array<string, string>
+     */
+    public static function profile(LDAPConnection $connection, array $attributes): array
+    {
+        $profile = [];
+
+        foreach ($connection->profileAttributes as $field => $attribute) {
+            $values = $attributes[strtolower($attribute)] ?? [];
+
+            if (count($values) > 1) {
+                throw new LDAPException('invalid_profile');
+            }
+
+            if ($values !== []) {
+                $profile[$field] = $values[0];
+            }
+        }
+
+        return $profile;
+    }
+
+    /**
      * Convert AD's mixed-endian, 16-byte objectGUID to a canonical UUID.
      */
     public static function normalizeObjectGuid(string $bytes): string
@@ -304,6 +330,127 @@ final readonly class LDAPUserResolver
         }
 
         return hash('sha256', $connectionId . "\0" . $externalId);
+    }
+
+    /**
+     * @param array<string, string|null>   $profile
+     * @param array<array-key, int|string> $localAccounts
+     *
+     * @return array{status: 'create'|'skipped'|'unchanged'|'update', user: User|null, changes: array<string, string|null>}
+     */
+    private function plan(
+        string $key,
+        array $profile,
+        bool $provision,
+        bool $updateProfile,
+        array $localAccounts = [],
+    ): array {
+        $identity = $this->identities->getIdentityBySecret(self::ID_TYPE, $key);
+        $user     = $identity === null ? null : $this->findUser($identity->user_id);
+        $username = $profile['username'] ?? null;
+
+        if (($user === null && ! $provision)
+            || ($user !== null && (! $updateProfile || $user->isBanned() || ! $user->isActivated()))
+            || $this->isReservedAccount($user, $username, $localAccounts)
+        ) {
+            return ['status' => 'skipped', 'user' => $user, 'changes' => []];
+        }
+
+        if ($user === null && $username === null) {
+            throw new LDAPException('invalid_profile');
+        }
+
+        if ($user !== null) {
+            $stored = $user->toRawArray();
+
+            foreach ($profile as $field => $value) {
+                if (array_key_exists($field, $stored) && $stored[$field] === $value) {
+                    unset($profile[$field]);
+                }
+            }
+        }
+
+        if (isset($profile['username'])) {
+            $this->checkUsername($profile['username'], $identity?->user_id);
+        }
+
+        $status = match (true) {
+            $user === null  => 'create',
+            $profile !== [] => 'update',
+            default         => 'unchanged',
+        };
+
+        return ['status' => $status, 'user' => $user, 'changes' => $profile];
+    }
+
+    /**
+     * @param array<array-key, int|string> $localAccounts
+     */
+    private function isReservedAccount(?User $user, ?string $username, array $localAccounts): bool
+    {
+        $userId         = $user?->id;
+        $storedUsername = $user?->username;
+
+        foreach ($localAccounts as $localUsername => $localId) {
+            if (($userId !== null && (string) $userId === (string) $localId)
+                || ($username !== null && strcasecmp($username, (string) $localUsername) === 0)
+                || ($storedUsername !== null && strcasecmp($storedUsername, (string) $localUsername) === 0)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, string|null> $changes
+     */
+    private function checkWritableFields(array $changes): void
+    {
+        $builder   = $this->users->builder();
+        $fields    = $builder->db()->getFieldNames($builder->getTable());
+        $protected = $this->users->__get('protectFields') === true;
+        $allowed   = $this->users->__get('allowedFields');
+
+        foreach (array_keys($changes) as $field) {
+            if (! in_array($field, $fields, true)
+                || ($protected && (! is_array($allowed) || ! in_array($field, $allowed, true)))
+            ) {
+                throw new LDAPException('invalid_profile');
+            }
+        }
+    }
+
+    /**
+     * @param array<string, string|null> $profile
+     */
+    private function saveProfile(string $connectionId, string $key, ?User $user, array $profile): User
+    {
+        if ($user === null) {
+            $userId = $this->users->insert($profile);
+            if ($userId === true) {
+                throw new LDAPException('synchronization_conflict');
+            }
+
+            $user = $this->readBackProfile($userId, $profile);
+            $this->createIdentity($connectionId, $key, $userId);
+
+            return $user;
+        }
+
+        if ($profile === []) {
+            return $user;
+        }
+
+        $userId = $user->id;
+        if ($userId === null) {
+            throw new LDAPException('synchronization_conflict');
+        }
+
+        $this->users->update($userId, $profile);
+
+        return $this->readBackProfile($userId, $profile);
     }
 
     /**
@@ -399,13 +546,13 @@ final readonly class LDAPUserResolver
     }
 
     /**
-     * @template T of bool|User
+     * @template T of bool|string|User
      *
      * @param Closure(): T $operation
      *
      * @return T
      */
-    private function atomically(Closure $operation): bool|User
+    private function atomically(Closure $operation): bool|string|User
     {
         try {
             $database = $this->users->builder()->db();
