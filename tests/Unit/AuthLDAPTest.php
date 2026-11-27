@@ -52,7 +52,7 @@ final class AuthLDAPTest extends TestCase
 
     public function testDefaultGroupGrantsTableName(): void
     {
-        $this->assertSame('shield_ldap_group_grants', (new AuthLDAP())->tables['group_grants']);
+        $this->assertSame('shield_ldap_group_grants', (new AuthLDAP())->tables['ldap_group_grants']);
     }
 
     public function testBuildsConnectionFromConfiguredMetadata(): void

@@ -26,7 +26,7 @@ final class AddLdapGroupGrants extends Migration
         $authConfig       = config('Auth');
         $this->DBGroup    = $authConfig->DBGroup ?? $this->DBGroup;
         $this->groupTable = $authConfig->tables['groups_users'];
-        $this->grantTable = config('AuthLDAP')->tables['group_grants'];
+        $this->grantTable = config('AuthLDAP')->getGroupGrantsTable();
 
         parent::__construct($forge);
     }

@@ -41,7 +41,7 @@ final class LDAPGroupSynchronizer
         }
 
         $groupTable  = $model->builder()->getTable();
-        $grantTable  = config('AuthLDAP')->tables['group_grants'];
+        $grantTable  = config('AuthLDAP')->getGroupGrantsTable();
         $memberships = $database->table($groupTable . ' memberships')
             ->select('memberships.id, memberships.group, grants.grant_key, grants.sources, grants.revision')
             ->join($grantTable . ' grants', 'grants.shield_group_id = memberships.id AND grants.user_id = memberships.user_id', 'left')

@@ -52,8 +52,9 @@ final class LDAPLoginTest extends DatabaseTestCase
 
     protected function setUpMigrate(): void
     {
-        $this->ldap                         = new AuthLDAP();
-        $this->ldap->tables['group_grants'] = self::GROUP_GRANTS_TABLE;
+        config('Auth')->tables['ldap_group_grants'] = self::GROUP_GRANTS_TABLE;
+        $this->ldap                                 = new AuthLDAP();
+        $this->ldap->tables['ldap_group_grants']    = 'fallback_ldap_group_grants';
         Factories::injectMock('config', 'AuthLDAP', $this->ldap);
 
         parent::setUpMigrate();
@@ -143,6 +144,13 @@ final class LDAPLoginTest extends DatabaseTestCase
         $this->assertFalse($user->inGroup('admin', 'superadmin'));
         $this->seeNumRecords(3, $this->tables['groups_users'], ['user_id' => $user->id]);
         $this->seeNumRecords(2, self::GROUP_GRANTS_TABLE, ['user_id' => $user->id]);
+    }
+
+    public function testUsesTheLdapTableNameWhenShieldOmitsTheKey(): void
+    {
+        unset(config('Auth')->tables['ldap_group_grants']);
+
+        $this->assertSame('fallback_ldap_group_grants', $this->ldap->getGroupGrantsTable());
     }
 
     public function testDirectoryChecksRevokeOnlyLdapOwnedGroupsForALinkedUser(): void

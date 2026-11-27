@@ -14,7 +14,7 @@ for complete Active Directory and OpenLDAP examples.
 | `$connections` | `[]` | Directory settings keyed by connection ID. Use 1 to 64 ASCII letters, digits, underscores, or hyphens. Start with a letter or digit. |
 | `$loginDomains` | `[]` | Maps lowercase UPN suffixes to connection IDs. The full submitted identifier is still used for the directory search. |
 | `$localAccounts` | `[]` | Maps reserved login identifiers to Shield user IDs for [hybrid login](../guides/user_management.md#local-ldap-and-hybrid-login). Identifiers are matched case-insensitively. |
-| `$tables` | `['group_grants' => 'shield_ldap_group_grants']` | Names the LDAP grant tracking table in Shield's database. |
+| `$tables` | `['ldap_group_grants' => 'shield_ldap_group_grants']` | Fallback name for the LDAP grant tracking table. The same key in `Config\Auth::$tables` takes precedence. |
 
 The default config builds and validates a connection when `getConnection()`
 is called. Use `connectionIds()` to list configured IDs.

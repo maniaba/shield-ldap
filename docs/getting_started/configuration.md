@@ -176,14 +176,16 @@ a single match across the selected bases before it verifies the password. See th
 ## Map LDAP Groups to Shield Groups
 
 Run the migrations after installing Shield to create the table that records
-LDAP group assignments. To use a custom table name, set `$tables['group_grants']`
-in **app/Config/AuthLDAP.php** before running the migration.
+LDAP group assignments. To use a custom table name, add the following entry to
+the existing `$tables` array in **app/Config/Auth.php** before running the
+migration.
 
 ```php
-public array $tables = [
-    'group_grants' => 'auth_ldap_group_grants',
-];
+'ldap_group_grants' => 'auth_ldap_group_grants',
 ```
+
+If Shield's config omits this key, Shield LDAP reads it from `$tables` in
+**app/Config/AuthLDAP.php**. The default is `shield_ldap_group_grants`.
 
 ```console
 php spark migrate --all

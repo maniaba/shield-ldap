@@ -70,11 +70,19 @@ class AuthLDAP extends BaseConfig
     /**
      * Table names for Shield LDAP persistence.
      *
-     * @var array{group_grants: string}
+     * @var array{ldap_group_grants: string}
      */
     public array $tables = [
-        'group_grants' => 'shield_ldap_group_grants',
+        'ldap_group_grants' => 'shield_ldap_group_grants',
     ];
+
+    /**
+     * Resolve the tracking table, preferring the application's Shield configuration.
+     */
+    public function getGroupGrantsTable(): string
+    {
+        return config('Auth')->tables['ldap_group_grants'] ?? $this->tables['ldap_group_grants'];
+    }
 
     /**
      * Retrieve the settings for the specified connection ID.
