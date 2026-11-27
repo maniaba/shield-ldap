@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://maniaba.github.io/shield-ldap/dev/ldap/">
+        <link rel="canonical" href="https://maniaba.github.io/shield-ldap/1.0.0/ldap/">
       
       
       
@@ -90,9 +90,8 @@
               
   
   
-    You're viewing the development version.
-    Some features may not be available in a stable release yet.
-    <a href="../../latest/"><strong>Go to the latest stable version.</strong></a>
+    You're not viewing the latest version.
+    <a href="../../latest/"><strong>Click here to go to latest.</strong></a>
   
 
             </div>
@@ -1028,17 +1027,6 @@ reference for the <code>maniaba/shield-ldap</code> package.</p>
       <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
-  
-    <script>
-      // Before the first stable release, /latest/ serves a copy of /dev/.
-      const guidePath = new URL("..", window.location.href).pathname;
-      if (/\/dev\/?$/.test(guidePath)) {
-        document$.subscribe(() => {
-          const notice = document.querySelector('[data-md-component="outdated"]');
-          if (notice) notice.hidden = false;
-        });
-      }
-    </script>
   
 
   </body>
