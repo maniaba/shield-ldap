@@ -28,8 +28,10 @@ final class LoginController extends BaseController
     public function loginAction(): RedirectResponse
     {
         /** @var LDAP $ldap */
-        $ldap   = auth('ldap')->getAuthenticator();
-        $result = $ldap->attempt($this->request->getPost(['username', 'password']));
+        $ldap = auth('ldap')->getAuthenticator();
+
+        $result = $ldap->remember((bool) $this->request->getPost('remember'))
+            ->attempt($this->request->getPost(['username', 'password']));
 
         if (! $result->isOK()) {
             return redirect()->route('login')->with('error', $result->reason());

@@ -23,9 +23,8 @@ public array $authenticators = [
 ```
 
 In the same file, set the `login` entry in the existing `$views` array to
-`'\App\Views\auth\ldap_login'` and set the `allowRemembering` entry in
-`$sessionConfig` to `false`. The following settings hide the registration and
-magic-link links, which the example routes omit.
+`'\App\Views\auth\ldap_login'`. The following settings hide the registration
+and magic-link links, which the example routes omit.
 
 ```php
 public bool $allowRegistration = false;
@@ -38,7 +37,8 @@ Copy **vendor/codeigniter4/shield/src/Views/login.php** to
 **app/Views/auth/ldap_login.php**. Replace the email input and its label with
 a text input named `username`. This accepts a short account name such as
 `alice` or a user principal name such as `alice@example.com`, depending on
-your directory configuration. Keep Shield's password input and CSRF field.
+your directory configuration. Keep Shield's password input, CSRF field, and
+existing **Remember me** checkbox.
 
 ```php
 <label for="ldapUsername"><?= lang('Auth.username') ?></label>
@@ -68,7 +68,8 @@ final class Login extends BaseController
     {
         /** @var LDAP $ldap */
         $ldap   = auth('ldap')->getAuthenticator();
-        $result = $ldap->attempt($this->request->getPost(['username', 'password']));
+        $result = $ldap->remember((bool) $this->request->getPost('remember'))
+            ->attempt($this->request->getPost(['username', 'password']));
 
         if (! $result->isOK()) {
             return redirect()->route('login')->with('error', $result->reason());
@@ -137,6 +138,31 @@ action that supports those accounts. Configure an applicable MFA action
 for each reserved local account if you use hybrid sign-in.
 
 See [Shield's authentication actions](https://github.com/codeigniter4/shield/blob/develop/docs/references/authentication/auth_actions.md).
+
+## Remembered Sign-ins
+
+The **Remember me** checkbox uses Shield's `Auth.sessionConfig` settings. To
+enable it, set `allowRemembering` to `true` in your application's effective
+session configuration. `rememberCookieName` sets the cookie name and
+`rememberLength` sets its lifetime in seconds. The login action passes the
+checkbox choice to `remember()` and uses `withCookies()` to send Shield's
+cookie with the redirect.
+
+Shield issues the token after successful LDAP authentication and completion
+of any pending login action. CodeIgniter discovers the package's login event
+listener. If your application disables discovery of events from this package
+in **app/Config/Modules.php**, register the listener in **app/Config/Events.php**.
+
+```php
+\CodeIgniter\Events\Events::on(
+    'login',
+    \Maniaba\ShieldLDAP\Authentication\Authenticators\LDAP::rememberAfterAction(...),
+    \CodeIgniter\Events\Events::PRIORITY_HIGH,
+);
+```
+
+The `session` alias handles restoring and rotating the token.
+[Account disabling and revocation](../guides/user_management.md#account-disabling-and-password-recovery)
 
 ## Test Sign-in
 

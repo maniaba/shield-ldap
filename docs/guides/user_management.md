@@ -85,9 +85,12 @@ A reserved identifier is matched case-insensitively and checked against the
 named local Shield account. Configure a Shield login MFA action for each
 reserved operator and confirm they can complete it during an LDAP outage.
 The authenticator requires a pending login action for a reserved account
-before establishing a session. Every other identifier is checked by the
-selected LDAP directory. Rejected directory credentials and outages both
-deny a new LDAP login.
+before establishing a session and issues remember-me tokens only for directory
+accounts. Every other identifier is checked by the selected LDAP directory.
+Rejected directory credentials and outages both deny a new LDAP login.
+
+Revoke pre-migration remember-me tokens for reserved local accounts before
+enabling remembered sign-ins.
 
 ## Authorization
 
@@ -99,8 +102,8 @@ including assignment of any groups your application requires for new users.
 
 Directory eligibility is checked during password login. When disabling an
 account in the directory, use your application's established procedures to
-revoke its existing Shield sessions and API tokens when immediate access
-removal is required.
+revoke its existing Shield sessions, API tokens, and remember-me tokens when
+immediate access removal is required.
 
 The authenticator uses the submitted directory password for verification.
 Shield stores the directory identity link and the mapped profile fields. A
@@ -109,7 +112,9 @@ Shield's `force-reset` filter to users with a Shield
 email/password identity if your Shield version requires that identity for a
 reset check. [Shield force-reset compatibility](https://github.com/codeigniter4/shield/pull/1411)
 
-For an LDAP-only application, review existing remember-me cookies and
-alternative login paths during migration. The LDAP authenticator issues no
-remember-me token. Keep Shield's `allowRemembering` disabled and revoke
-pre-migration tokens according to your application's policies.
+[Remembered sign-ins](../quick_start_guide/using_ldap_auth.md#remembered-sign-ins)
+are restored by Shield using the token and local user record, without rebinding
+to LDAP or checking the user's current status in the directory. Shield rotates
+the token on restoration and revokes the user's remember-me tokens on logout.
+To revoke a user's remember-me tokens from an administrator workflow, pass the
+user to `auth('session')->getAuthenticator()->forget($user)`.
