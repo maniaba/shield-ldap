@@ -42,11 +42,22 @@ final class LDAPLoginTest extends DatabaseTestCase
 {
     use FeatureTestTrait;
 
+    private const GROUP_GRANTS_TABLE = 'custom_ldap_group_grants';
+
     protected $refresh   = true;
     protected $namespace = ['\\CodeIgniter\\Shield', '\\Maniaba\\ShieldLDAP'];
     private User $user;
     private AuthLDAP $ldap;
     private LDAPDirectoryInterface&MockObject $directory;
+
+    protected function setUpMigrate(): void
+    {
+        $this->ldap                         = new AuthLDAP();
+        $this->ldap->tables['group_grants'] = self::GROUP_GRANTS_TABLE;
+        Factories::injectMock('config', 'AuthLDAP', $this->ldap);
+
+        parent::setUpMigrate();
+    }
 
     protected function setUp(): void
     {
@@ -62,7 +73,6 @@ final class LDAPLoginTest extends DatabaseTestCase
         $auth->authenticators['ldap']            = LDAP::class;
         $auth->sessionConfig['allowRemembering'] = false;
 
-        $this->ldap                         = new AuthLDAP();
         $this->ldap->enabled                = true;
         $this->ldap->defaultConnection      = 'example';
         $this->ldap->connections['example'] = [
@@ -73,8 +83,6 @@ final class LDAPLoginTest extends DatabaseTestCase
             'profileAttributes' => ['username' => 'uid'],
             'provisionUsers'    => true,
         ];
-        Factories::injectMock('config', 'AuthLDAP', $this->ldap);
-
         $this->directory = $this->createMock(LDAPDirectoryInterface::class);
         Services::injectMock('ldapDirectory', $this->directory);
 
@@ -134,6 +142,7 @@ final class LDAPLoginTest extends DatabaseTestCase
         $this->assertTrue($user->inGroup('beta'));
         $this->assertFalse($user->inGroup('admin', 'superadmin'));
         $this->seeNumRecords(3, $this->tables['groups_users'], ['user_id' => $user->id]);
+        $this->seeNumRecords(2, self::GROUP_GRANTS_TABLE, ['user_id' => $user->id]);
     }
 
     public function testDirectoryChecksRevokeOnlyLdapOwnedGroupsForALinkedUser(): void

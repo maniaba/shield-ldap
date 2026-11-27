@@ -68,6 +68,15 @@ class AuthLDAP extends BaseConfig
     public array $localAccounts = [];
 
     /**
+     * Table names for Shield LDAP persistence.
+     *
+     * @var array{group_grants: string}
+     */
+    public array $tables = [
+        'group_grants' => 'shield_ldap_group_grants',
+    ];
+
+    /**
      * Retrieve the settings for the specified connection ID.
      *
      * Override this method to load a named connection from an application-owned provider.

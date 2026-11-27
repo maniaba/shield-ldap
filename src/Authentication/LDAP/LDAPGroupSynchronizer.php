@@ -28,8 +28,6 @@ use Maniaba\ShieldLDAP\Exceptions\LDAPReason;
  */
 final class LDAPGroupSynchronizer
 {
-    public const TABLE = 'shield_ldap_group_grants';
-
     /**
      * @param list<string> $groups Group keys verified by this connection
      */
@@ -43,13 +41,14 @@ final class LDAPGroupSynchronizer
         }
 
         $groupTable  = $model->builder()->getTable();
+        $grantTable  = config('AuthLDAP')->tables['group_grants'];
         $memberships = $database->table($groupTable . ' memberships')
             ->select('memberships.id, memberships.group, grants.grant_key, grants.sources, grants.revision')
-            ->join(self::TABLE . ' grants', 'grants.shield_group_id = memberships.id AND grants.user_id = memberships.user_id', 'left')
+            ->join($grantTable . ' grants', 'grants.shield_group_id = memberships.id AND grants.user_id = memberships.user_id', 'left')
             ->where('memberships.user_id', $userId)
             ->get()
             ->getResultArray();
-        $grants = $database->table(self::TABLE);
+        $grants = $database->table($grantTable);
         $source = hash('sha256', $connectionId);
         $groups = array_unique($groups);
 

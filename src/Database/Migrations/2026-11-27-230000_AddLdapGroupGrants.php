@@ -15,17 +15,18 @@ namespace Maniaba\ShieldLDAP\Database\Migrations;
 
 use CodeIgniter\Database\Forge;
 use CodeIgniter\Database\Migration;
-use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPGroupSynchronizer;
 
 final class AddLdapGroupGrants extends Migration
 {
     private readonly string $groupTable;
+    private readonly string $grantTable;
 
     public function __construct(?Forge $forge = null)
     {
         $authConfig       = config('Auth');
         $this->DBGroup    = $authConfig->DBGroup ?? $this->DBGroup;
         $this->groupTable = $authConfig->tables['groups_users'];
+        $this->grantTable = config('AuthLDAP')->tables['group_grants'];
 
         parent::__construct($forge);
     }
@@ -43,11 +44,11 @@ final class AddLdapGroupGrants extends Migration
         $this->forge->addUniqueKey('grant_key');
         $this->forge->addForeignKey('shield_group_id', $this->groupTable, 'id', '', 'CASCADE');
         $attributes = $this->db->getPlatform() === 'MySQLi' ? ['ENGINE' => 'InnoDB'] : [];
-        $this->forge->createTable(LDAPGroupSynchronizer::TABLE, false, $attributes);
+        $this->forge->createTable($this->grantTable, false, $attributes);
     }
 
     public function down(): void
     {
-        $this->forge->dropTable(LDAPGroupSynchronizer::TABLE, true);
+        $this->forge->dropTable($this->grantTable, true);
     }
 }
