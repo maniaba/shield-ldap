@@ -47,12 +47,44 @@ Run `mkdocs build --strict` before submitting documentation changes.
 
 ## Pull Requests
 
-- Open pull requests against `develop` and keep each one focused on a single change.
+- Open development pull requests against `develop` and keep each one focused on a single change.
 - Explain what changed and how you verified it.
 - Include regression tests for behavior changes and update the relevant examples.
 
 `develop` is the default branch for development. `main` is the release branch.
 GitHub Actions checks both branches.
+
+## Releasing Shield LDAP
+
+1. Create a preparation branch from `develop`, such as `release/v1.0.0`. Add
+   the matching entry to [CHANGELOG.md](CHANGELOG.md) and open a pull request
+   against `develop`. Review it and merge once GitHub Actions passes.
+2. Open a pull request to `main` from the prepared `develop` commit. Review the
+   release diff and wait for GitHub Actions to pass, then use
+   **Create a merge commit** to preserve the development history.
+3. Fetch `main` and confirm its tip matches the promotion PR's merge commit.
+   Create and push a signed, annotated tag for that commit. For example, for
+   `v1.0.0` run the following commands after verifying the commit.
+
+   ```console
+   git fetch origin main
+   git log -1 --oneline origin/main
+   git tag -s -m "Shield LDAP v1.0.0" v1.0.0 origin/main
+   git push origin refs/tags/v1.0.0
+   ```
+
+4. Copy the matching changelog section into a local `release-notes.md` file and
+   publish the GitHub release from the existing tag.
+
+   ```console
+   gh release create v1.0.0 --verify-tag --title v1.0.0 --notes-file release-notes.md
+   ```
+
+5. Check that Packagist lists the new version and that the User Guide workflow
+   publishes the numbered guide and updates `/latest/`.
+
+Composer derives the package version from the Git tag.
+[Composer versioning for libraries](https://getcomposer.org/doc/02-libraries.md#library-versioning)
 
 ## Reporting Issues
 
