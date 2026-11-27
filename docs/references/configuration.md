@@ -14,6 +14,7 @@ for complete Active Directory and OpenLDAP examples.
 | `$connections` | `[]` | Directory settings keyed by connection ID. Use 1 to 64 ASCII letters, digits, underscores, or hyphens. Start with a letter or digit. |
 | `$loginDomains` | `[]` | Maps lowercase UPN suffixes to connection IDs. The full submitted identifier is still used for the directory search. |
 | `$localAccounts` | `[]` | Maps reserved login identifiers to Shield user IDs for [hybrid login](../guides/user_management.md#local-ldap-and-hybrid-login). Identifiers are matched case-insensitively. |
+| `$tables` | `['ldap_group_grants' => 'shield_ldap_group_grants']` | Fallback name for the LDAP grant tracking table. The same key in `Config\Auth::$tables` takes precedence. |
 
 The default config builds and validates a connection when `getConnection()`
 is called. Use `connectionIds()` to list configured IDs.
@@ -36,6 +37,7 @@ is called. Use `connectionIds()` to list configured IDs.
 | `loginAttributes` | `['uid']` | List of 1 to 10 LDAP attributes accepted as a login identifier. The directory evaluates equality using its schema rules. |
 | `externalIdAttribute` | `'entryUUID'` | Immutable, single-valued LDAP attribute used to link the Shield user. Use `objectGUID` for Active Directory. |
 | `profileAttributes` | `[]` | Map of writable Shield user fields to single-valued directory attributes. Map `username` when provisioning users. |
+| `groupMappings` | `null` | Map from existing Shield group keys to full LDAP group DNs on this connection. An empty array withdraws this connection's previous grants at the user's next LDAP sign-in. `null` disables group management. See [Map LDAP Groups to Shield Groups](../getting_started/configuration.md#map-ldap-groups-to-shield-groups). |
 | `provisionUsers` | `false` | Creates a Shield user during successful LDAP sign-in or [directory synchronization](../commands/index.md#synchronize-users) when there is no existing link. |
 | `eligibilityFilter` | `'(objectClass=*)'` | Additional trusted filter evaluated after password verification at sign-in and combined with `loginFilter` during synchronization. |
 | `updateProfile` | `true` | Updates mapped attributes on existing linked users during successful directory checks and synchronization. When `false`, mappings still apply on provisioning. |

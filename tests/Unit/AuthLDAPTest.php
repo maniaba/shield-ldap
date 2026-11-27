@@ -42,11 +42,17 @@ final class AuthLDAPTest extends TestCase
         'eligibilityFilter'   => '(accountStatus=active)',
         'updateProfile'       => false,
         'verifyCertificate'   => true,
+        'groupMappings'       => ['user' => 'cn=users,ou=groups,dc=example,dc=test'],
     ];
 
     public function testDefaultConfigurationHasNoConnections(): void
     {
         $this->assertSame([], (new AuthLDAP())->connectionIds());
+    }
+
+    public function testDefaultGroupGrantsTableName(): void
+    {
+        $this->assertSame('shield_ldap_group_grants', (new AuthLDAP())->tables['ldap_group_grants']);
     }
 
     public function testBuildsConnectionFromConfiguredMetadata(): void
@@ -220,6 +226,14 @@ final class AuthLDAPTest extends TestCase
         yield 'invalid port type' => [['port' => 'not-a-port']];
 
         yield 'invalid certificate verification type' => [['verifyCertificate' => 'not-a-bool']];
+
+        yield 'group mappings as list' => [['groupMappings' => ['cn=users,dc=example,dc=test']]];
+
+        yield 'empty Shield group key' => [['groupMappings' => ['' => 'cn=users,dc=example,dc=test']]];
+
+        yield 'LDAP group DN as list' => [['groupMappings' => ['user' => ['cn=users,dc=example,dc=test']]]];
+
+        yield 'blank LDAP group DN' => [['groupMappings' => ['user' => '  ']]];
 
         yield 'numeric host' => [['hosts' => [123]]];
 

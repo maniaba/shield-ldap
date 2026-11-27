@@ -36,10 +36,12 @@ interface LDAPDirectoryInterface
 
     /**
      * Search for one user, verify their password, and apply the eligibility filter.
+     * If groupMappings has entries, return the verified Shield group keys as
+     * matchedGroups, including an empty list when the user matches no groups.
      *
      * @param list<string> $attributes
      *
-     * @return array{dn: string, attributes: array<string, list<string>>} Attribute names are lowercase.
+     * @return array{dn: string, attributes: array<string, list<string>>, matchedGroups?: list<string>} Attribute names are lowercase.
      *
      * @throws LDAPException If the directory cannot verify one eligible user.
      */

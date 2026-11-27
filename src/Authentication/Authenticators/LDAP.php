@@ -193,6 +193,12 @@ class LDAP extends Session
             throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
+        $configuredGroups = array_keys($connection->groupMappings ?? []);
+
+        if ($configuredGroups !== [] && array_diff($configuredGroups, array_keys(setting('AuthGroups.groups'))) !== []) {
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
+        }
+
         $predicates = [];
 
         foreach ($connection->loginAttributes as $attribute) {
@@ -216,6 +222,16 @@ class LDAP extends Session
             $connection->eligibilityFilter,
         );
 
+        $matchedGroups = $connection->groupMappings === [] ? [] : null;
+
+        if ($configuredGroups !== []) {
+            $matchedGroups = $entry['matchedGroups'] ?? throw new LDAPException(LDAPReason::InvalidConfiguration);
+
+            if (array_diff($matchedGroups, $configuredGroups) !== []) {
+                throw new LDAPException(LDAPReason::InvalidDirectoryEntry);
+            }
+        }
+
         return $this->resolver->resolve(
             $connection->id,
             LDAPUserResolver::externalId($connection, $entry['attributes']),
@@ -223,6 +239,7 @@ class LDAP extends Session
             $connection->provisionUsers,
             $connection->updateProfile,
             $this->localAccounts,
+            $matchedGroups,
         );
     }
 

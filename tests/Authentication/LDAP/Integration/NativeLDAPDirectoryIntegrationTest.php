@@ -71,6 +71,23 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
         $this->assertSame(['alice'], $entry['attributes']['uid']);
     }
 
+    public function testReadsDirectGroupMembershipsFromTheConfiguredGroupEntries(): void
+    {
+        $connection = $this->connection(groupMappings: [
+            'user'      => 'CN=SHIELD-USERS,' . self::GROUP_BASE_DN,
+            'developer' => 'cn=shield-developers,' . self::GROUP_BASE_DN,
+            'nested'    => 'cn=shield-nested,' . self::GROUP_BASE_DN,
+            'container' => self::GROUP_BASE_DN,
+        ]);
+        $directory = new NativeLDAPDirectory();
+
+        $alice = $directory->authenticate($connection, self::USER_BASE_DN, '(uid=alice)', [], 'alicePassword!');
+        $bob   = $directory->authenticate($connection, self::USER_BASE_DN, '(uid=bob)', [], 'bobPassword!');
+
+        $this->assertSame(['user', 'developer'], $alice['matchedGroups']);
+        $this->assertSame([], $bob['matchedGroups']);
+    }
+
     public function testLooksUpAnEligibleDirectoryIdentityForLinking(): void
     {
         $connection = $this->connection();
@@ -287,10 +304,15 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
     }
 
     /**
-     * @param list<string> $hosts
+     * @param list<string>          $hosts
+     * @param array<string, string> $groupMappings
      */
-    private function connection(string $encryption = 'starttls', array $hosts = ['127.0.0.1'], bool $verifyCertificate = true): LDAPConnection
-    {
+    private function connection(
+        string $encryption = 'starttls',
+        array $hosts = ['127.0.0.1'],
+        bool $verifyCertificate = true,
+        array $groupMappings = [],
+    ): LDAPConnection {
         $port = getenv($encryption === 'ldaps' ? 'SHIELD_LDAP_TEST_LDAPS_PORT' : 'SHIELD_LDAP_TEST_PORT');
 
         if (! extension_loaded('ldap') || $port === false || ! ctype_digit($port)) {
@@ -306,6 +328,7 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
             $encryption,
             (int) $port,
             verifyCertificate: $verifyCertificate,
+            groupMappings: $groupMappings,
         );
     }
 }

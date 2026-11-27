@@ -53,6 +53,7 @@ class AuthLDAP extends BaseConfig
         //     'loginAttributes'     => ['sAMAccountName', 'userPrincipalName'],
         //     'externalIdAttribute' => 'objectGUID',
         //     'profileAttributes'   => ['username' => 'sAMAccountName'],
+        //     'groupMappings'       => ['user' => 'CN=Users Group,OU=Groups,DC=example,DC=com'],
         // ],
     ];
 
@@ -65,6 +66,23 @@ class AuthLDAP extends BaseConfig
      * @var array<string, int|string> Case-insensitive login identifier to expected local user ID.
      */
     public array $localAccounts = [];
+
+    /**
+     * Table names for Shield LDAP persistence.
+     *
+     * @var array{ldap_group_grants: string}
+     */
+    public array $tables = [
+        'ldap_group_grants' => 'shield_ldap_group_grants',
+    ];
+
+    /**
+     * Resolve the tracking table, preferring the application's Shield configuration.
+     */
+    public function getGroupGrantsTable(): string
+    {
+        return config('Auth')->tables['ldap_group_grants'] ?? $this->tables['ldap_group_grants'];
+    }
 
     /**
      * Retrieve the settings for the specified connection ID.

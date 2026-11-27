@@ -40,6 +40,7 @@ final readonly class LDAPProfileSynchronizer
      *
      * @param array<string, string|null>   $profile
      * @param array<array-key, int|string> $localAccounts
+     * @param list<string>|null            $groups        Verified Shield group keys
      */
     public function resolve(
         string $connectionId,
@@ -48,18 +49,25 @@ final readonly class LDAPProfileSynchronizer
         bool $provision = false,
         bool $updateProfile = true,
         array $localAccounts = [],
+        ?array $groups = null,
     ): User {
         $key     = LDAPIdentityPersistence::key($connectionId, $externalId);
         $profile = $this->validateProfile($profile);
 
-        return $this->identities->transaction(function () use ($connectionId, $key, $profile, $provision, $updateProfile, $localAccounts): User {
+        return $this->identities->transaction(function () use ($connectionId, $key, $profile, $provision, $updateProfile, $localAccounts, $groups): User {
             $change = $this->prepareChange($key, $profile, $provision, $updateProfile, $localAccounts);
 
             if (isset($change['loginFailure'])) {
                 throw new LDAPException($change['loginFailure']);
             }
 
-            return $this->saveProfile($connectionId, $key, $change['user'], $change['fields']);
+            $user = $this->saveProfile($connectionId, $key, $change['user'], $change['fields']);
+
+            if ($groups !== null && ! $user->isBanned() && $user->isActivated()) {
+                (new LDAPGroupSynchronizer())->synchronize($this->users->builder()->db(), $user, $connectionId, $groups);
+            }
+
+            return $user;
         });
     }
 

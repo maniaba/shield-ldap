@@ -94,10 +94,42 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
             $this->bind($ldap, $entry['dn'], $password, false);
             $this->bind($ldap, $connection->bindDn, $connection->bindPassword(), true);
 
-            return $this->readEligibleEntry($ldap, $connection, $entry, $eligibility, $attributes);
+            $verified = $this->readEligibleEntry($ldap, $connection, $entry, $eligibility, $attributes);
+
+            if (($connection->groupMappings ?? []) !== []) {
+                $verified['matchedGroups'] = $this->findMappedGroups($ldap, $connection, $verified['dn']);
+            }
+
+            return $verified;
         } finally {
             ldap_unbind($ldap);
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function findMappedGroups(Connection $ldap, LDAPConnection $connection, string $userDn): array
+    {
+        $filter = LDAPFilter::any(
+            LDAPFilter::all(
+                '(|(objectClass=group)(objectClass=groupOfNames))',
+                LDAPFilter::equal('member', $userDn),
+            ),
+            LDAPFilter::all(
+                '(objectClass=groupOfUniqueNames)',
+                LDAPFilter::equal('uniqueMember', $userDn),
+            ),
+        );
+        $matched = [];
+
+        foreach ($connection->groupMappings ?? [] as $group => $dn) {
+            if ($this->search($ldap, $connection, $dn, $filter, [], 1, true) !== []) {
+                $matched[] = $group;
+            }
+        }
+
+        return $matched;
     }
 
     /**

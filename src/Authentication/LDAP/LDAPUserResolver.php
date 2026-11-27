@@ -46,6 +46,7 @@ final readonly class LDAPUserResolver
      *
      * @param array<string, string|null>   $profile
      * @param array<array-key, int|string> $localAccounts
+     * @param list<string>|null            $groups        Verified Shield group keys
      */
     public function resolve(
         string $connectionId,
@@ -54,8 +55,9 @@ final readonly class LDAPUserResolver
         bool $provision = false,
         bool $updateProfile = true,
         array $localAccounts = [],
+        ?array $groups = null,
     ): User {
-        return $this->profiles->resolve($connectionId, $externalId, $profile, $provision, $updateProfile, $localAccounts);
+        return $this->profiles->resolve($connectionId, $externalId, $profile, $provision, $updateProfile, $localAccounts, $groups);
     }
 
     /**

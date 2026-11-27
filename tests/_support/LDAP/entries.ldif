@@ -36,3 +36,13 @@ dn: cn=shield-users,ou=groups,dc=example,dc=test
 objectClass: groupOfNames
 cn: shield-users
 member: uid=alice,ou=people,dc=example,dc=test
+
+dn: cn=shield-developers,ou=groups,dc=example,dc=test
+objectClass: groupOfUniqueNames
+cn: shield-developers
+uniqueMember: uid=alice,ou=people,dc=example,dc=test
+
+dn: cn=shield-nested,ou=groups,dc=example,dc=test
+objectClass: groupOfNames
+cn: shield-nested
+member: cn=shield-users,ou=groups,dc=example,dc=test

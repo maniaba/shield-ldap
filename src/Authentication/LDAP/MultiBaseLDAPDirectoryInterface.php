@@ -27,7 +27,7 @@ interface MultiBaseLDAPDirectoryInterface extends LDAPDirectoryInterface
      * @param list<string>|string $baseDn
      * @param list<string>        $attributes
      *
-     * @return array{dn: string, attributes: array<string, list<string>>}
+     * @return array{dn: string, attributes: array<string, list<string>>, matchedGroups?: list<string>}
      */
     public function authenticate(
         LDAPConnection $connection,

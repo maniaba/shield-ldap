@@ -108,8 +108,9 @@ operation and show the operator only the information needed for diagnosis.
 
 !!! note
 
-    `auth('ldap')->check()` resolves a Shield user and may provision or update
-    that user. For application sign-in, use `auth('ldap')->attempt()` and
+    `auth('ldap')->check()` resolves a Shield user and may provision the user,
+    update their profile, or reconcile mapped groups. For application sign-in, use
+    `auth('ldap')->attempt()` and
     complete the configured Shield login actions. See the
     [LDAP login quick start](../quick_start_guide/using_ldap_auth.md).
 
@@ -147,6 +148,9 @@ An implementation used for sign-in must verify the submitted password over
 a trusted encrypted connection, require one matching user, and recheck the
 same immutable identity against the eligibility filter. Return the entry DN
 and the requested attribute values using lowercase keys and lists of strings.
+For a connection with `groupMappings`, return a `matchedGroups` list of the
+Shield group keys whose LDAP membership you verified for that same user.
+Return an empty list when no configured group matches.
 Throw `LDAPException` with a reason code instead of passing native exceptions
 or credentials to the application.
 

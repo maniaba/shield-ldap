@@ -42,10 +42,23 @@ final class LDAPLoginTest extends DatabaseTestCase
 {
     use FeatureTestTrait;
 
-    protected $refresh = true;
+    private const GROUP_GRANTS_TABLE = 'custom_ldap_group_grants';
+
+    protected $refresh   = true;
+    protected $namespace = ['\\CodeIgniter\\Shield', '\\Maniaba\\ShieldLDAP'];
     private User $user;
     private AuthLDAP $ldap;
     private LDAPDirectoryInterface&MockObject $directory;
+
+    protected function setUpMigrate(): void
+    {
+        config('Auth')->tables['ldap_group_grants'] = self::GROUP_GRANTS_TABLE;
+        $this->ldap                                 = new AuthLDAP();
+        $this->ldap->tables['ldap_group_grants']    = 'fallback_ldap_group_grants';
+        Factories::injectMock('config', 'AuthLDAP', $this->ldap);
+
+        parent::setUpMigrate();
+    }
 
     protected function setUp(): void
     {
@@ -61,7 +74,6 @@ final class LDAPLoginTest extends DatabaseTestCase
         $auth->authenticators['ldap']            = LDAP::class;
         $auth->sessionConfig['allowRemembering'] = false;
 
-        $this->ldap                         = new AuthLDAP();
         $this->ldap->enabled                = true;
         $this->ldap->defaultConnection      = 'example';
         $this->ldap->connections['example'] = [
@@ -72,8 +84,6 @@ final class LDAPLoginTest extends DatabaseTestCase
             'profileAttributes' => ['username' => 'uid'],
             'provisionUsers'    => true,
         ];
-        Factories::injectMock('config', 'AuthLDAP', $this->ldap);
-
         $this->directory = $this->createMock(LDAPDirectoryInterface::class);
         Services::injectMock('ldapDirectory', $this->directory);
 
@@ -101,6 +111,179 @@ final class LDAPLoginTest extends DatabaseTestCase
         $this->seeInDatabase($this->tables['logins'], ['user_id' => $user->id, 'success' => 1]);
         $this->dontSeeInDatabase($this->tables['remember_tokens'], ['user_id' => $user->id]);
         $this->assertNull(session('_ci_old_input'));
+    }
+
+    public function testDirectoryLoginGrantsMappedGroupsFromTheSelectedConnection(): void
+    {
+        setting('AuthGroups.defaultGroup', 'beta');
+        $mappings = [
+            'user'       => 'cn=users,ou=groups,dc=example,dc=com',
+            'developer'  => 'cn=developers,ou=groups,dc=example,dc=com',
+            'superadmin' => 'cn=senior-admins,ou=groups,dc=example,dc=com',
+        ];
+        $this->ldap->connections['example']['groupMappings'] = ['admin' => 'cn=admins,dc=example,dc=com'];
+        $this->ldap->connections['research']                 = ['groupMappings' => $mappings] + $this->ldap->connections['example'];
+        $this->ldap->loginDomains['research.example.com']    = 'research';
+        $this->directory->expects($this->once())->method('authenticate')->willReturnCallback(
+            function (LDAPConnection $connection) use ($mappings): array {
+                $this->assertSame('research', $connection->id);
+                $this->assertSame($mappings, $connection->groupMappings);
+
+                return $this->entry() + ['matchedGroups' => ['user', 'developer']];
+            },
+        );
+
+        $response = $this->post('/login', ['username' => 'directory-user@research.example.com', 'password' => 'directory-secret']);
+
+        $response->assertSessionMissing('error');
+        $user = auth('session')->user();
+        $this->assertInstanceOf(User::class, $user);
+        $this->assertTrue($user->inGroup('user'));
+        $this->assertTrue($user->inGroup('developer'));
+        $this->assertTrue($user->inGroup('beta'));
+        $this->assertFalse($user->inGroup('admin', 'superadmin'));
+        $this->seeNumRecords(3, $this->tables['groups_users'], ['user_id' => $user->id]);
+        $this->seeNumRecords(2, self::GROUP_GRANTS_TABLE, ['user_id' => $user->id]);
+    }
+
+    public function testUsesTheLdapTableNameWhenShieldOmitsTheKey(): void
+    {
+        unset(config('Auth')->tables['ldap_group_grants']);
+
+        $this->assertSame('fallback_ldap_group_grants', $this->ldap->getGroupGrantsTable());
+    }
+
+    public function testDirectoryChecksRevokeOnlyLdapOwnedGroupsForALinkedUser(): void
+    {
+        $this->user->addGroup('beta', 'developer');
+        $this->ldap->connections['example']['groupMappings'] = [
+            'developer' => 'cn=developers,dc=example,dc=com',
+            'admin'     => 'cn=admins,dc=example,dc=com',
+        ];
+        $this->ldap->connections['example']['provisionUsers'] = false;
+        $this->ldap->connections['example']['updateProfile']  = false;
+        (new LDAPUserResolver(model(UserModel::class)))->link('example', 'stable-id', $this->user->id);
+        $this->directory->expects($this->exactly(4))->method('authenticate')->willReturnOnConsecutiveCalls(
+            $this->entry() + ['matchedGroups' => ['developer', 'admin']],
+            $this->entry() + ['matchedGroups' => ['developer', 'admin']],
+            $this->throwException(new LDAPException('directory_unavailable')),
+            $this->entry() + ['matchedGroups' => []],
+        );
+
+        $ldap        = new LDAP(model(UserModel::class), $this->ldap, $this->directory);
+        $credentials = ['username' => 'directory-user', 'password' => 'directory-secret'];
+
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            $result = $ldap->check($credentials);
+            $this->assertTrue($result->isOK());
+            $this->assertSame($this->user->id, $result->extraInfo()->id);
+            $this->assertSame('local-user', $result->extraInfo()->username);
+            $this->assertTrue($result->extraInfo()->inGroup('admin'));
+        }
+
+        $this->assertFalse($ldap->check($credentials)->isOK());
+        $this->seeNumRecords(1, $this->tables['groups_users'], ['user_id' => $this->user->id, 'group' => 'admin']);
+        $result = $ldap->check($credentials);
+
+        $this->assertTrue($result->isOK());
+        $this->assertFalse($result->extraInfo()->inGroup('admin'));
+        $this->dontSeeInDatabase($this->tables['groups_users'], ['user_id' => $this->user->id, 'group' => 'admin']);
+        $this->seeNumRecords(1, $this->tables['groups_users'], ['user_id' => $this->user->id, 'group' => 'developer']);
+        $this->seeNumRecords(1, $this->tables['groups_users'], ['user_id' => $this->user->id, 'group' => 'beta']);
+    }
+
+    public function testManuallyReplacingAnLdapOwnedGroupKeepsTheNewAssignment(): void
+    {
+        $this->ldap->connections['example']['groupMappings'] = ['developer' => 'cn=developers,dc=example,dc=com'];
+        $this->directory->expects($this->exactly(2))->method('authenticate')->willReturnOnConsecutiveCalls(
+            $this->entry() + ['matchedGroups' => ['developer']],
+            $this->entry() + ['matchedGroups' => []],
+        );
+        $ldap        = new LDAP(model(UserModel::class), $this->ldap, $this->directory);
+        $credentials = ['username' => 'directory-user', 'password' => 'directory-secret'];
+        $user        = $ldap->check($credentials)->extraInfo();
+        $this->assertInstanceOf(User::class, $user);
+        $this->assertTrue($user->inGroup('developer'));
+        $this->assertTrue($user->inGroup('user'));
+
+        $user->removeGroup('developer')->addGroup('developer');
+        $result = $ldap->check($credentials);
+
+        $this->assertTrue($result->isOK());
+        $this->assertTrue($result->extraInfo()->inGroup('developer'));
+        $this->assertTrue($result->extraInfo()->inGroup('user'));
+        $this->seeNumRecords(1, $this->tables['groups_users'], ['user_id' => $user->id, 'group' => 'developer']);
+    }
+
+    public function testLdapOwnedGroupSurvivesUntilTheLastConnectionWithdrawsIt(): void
+    {
+        $this->ldap->connections['example']['groupMappings'] = ['developer' => 'cn=developers,dc=example,dc=com'];
+        $this->ldap->connections['example']['updateProfile'] = false;
+        $this->ldap->connections['research']                 = $this->ldap->connections['example'];
+        $this->ldap->loginDomains['research.example.com']    = 'research';
+        $resolver                                            = new LDAPUserResolver(model(UserModel::class));
+        $resolver->link('example', 'stable-id', $this->user->id);
+        $resolver->link('research', 'stable-id', $this->user->id);
+        $this->directory->expects($this->exactly(4))->method('authenticate')->willReturnOnConsecutiveCalls(
+            $this->entry() + ['matchedGroups' => ['developer']],
+            $this->entry() + ['matchedGroups' => ['developer']],
+            $this->entry() + ['matchedGroups' => []],
+            $this->entry(),
+        );
+        $ldap     = new LDAP(model(UserModel::class), $this->ldap, $this->directory);
+        $example  = ['username' => 'directory-user', 'password' => 'directory-secret'];
+        $research = ['username' => 'directory-user@research.example.com', 'password' => 'directory-secret'];
+
+        $this->assertTrue($ldap->check($example)->isOK());
+        $this->assertTrue($ldap->check($research)->isOK());
+        $stillGranted = $ldap->check($example);
+        $this->assertTrue($stillGranted->isOK());
+        $this->assertTrue($stillGranted->extraInfo()->inGroup('developer'));
+        $this->seeNumRecords(1, $this->tables['groups_users'], ['user_id' => $this->user->id, 'group' => 'developer']);
+
+        $this->ldap->connections['research']['groupMappings'] = [];
+        $revoked                                              = $ldap->check($research);
+        $this->assertTrue($revoked->isOK());
+        $this->assertFalse($revoked->extraInfo()->inGroup('developer'));
+        $this->dontSeeInDatabase($this->tables['groups_users'], ['user_id' => $this->user->id, 'group' => 'developer']);
+    }
+
+    public function testRejectsMappingToAnUnknownShieldGroupBeforeQueryingLdap(): void
+    {
+        $this->ldap->connections['example']['groupMappings'] = ['unknown' => 'cn=users,dc=example,dc=com'];
+        $this->directory->expects($this->never())->method('authenticate');
+
+        $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
+
+        $response->assertSessionHas('error', lang('Auth.badAttempt'));
+        $this->assertFalse(auth('session')->loggedIn());
+        $this->dontSeeInDatabase($this->tables['users'], ['username' => 'directory-user']);
+    }
+
+    /**
+     * @param array{matchedGroups?: list<string>} $groups
+     */
+    #[DataProvider('provideRejectsDirectoryResultsWithoutAValidGroupReport')]
+    public function testRejectsDirectoryResultsWithoutAValidGroupReport(array $groups): void
+    {
+        $this->ldap->connections['example']['groupMappings'] = ['user' => 'cn=users,dc=example,dc=com'];
+        $this->directory->expects($this->once())->method('authenticate')->willReturn($this->entry() + $groups);
+
+        $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
+
+        $response->assertSessionHas('error', lang('Auth.badAttempt'));
+        $this->assertFalse(auth('session')->loggedIn());
+        $this->dontSeeInDatabase($this->tables['users'], ['username' => 'directory-user']);
+    }
+
+    /**
+     * @return iterable<string, array{array{matchedGroups?: list<string>}}>
+     */
+    public static function provideRejectsDirectoryResultsWithoutAValidGroupReport(): iterable
+    {
+        yield 'missing group report' => [[]];
+
+        yield 'group from outside the mapping' => [['matchedGroups' => ['admin']]];
     }
 
     public function testDirectoryLoginPassesConfiguredUserBaseDnsToASupportingDirectory(): void
