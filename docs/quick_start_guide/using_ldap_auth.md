@@ -67,7 +67,8 @@ final class Login extends BaseController
     public function loginAction(): RedirectResponse
     {
         /** @var LDAP $ldap */
-        $ldap   = auth('ldap')->getAuthenticator();
+        $ldap = auth('ldap')->getAuthenticator();
+
         $result = $ldap->remember((bool) $this->request->getPost('remember'))
             ->attempt($this->request->getPost(['username', 'password']));
 
@@ -148,20 +149,10 @@ session configuration. `rememberCookieName` sets the cookie name and
 checkbox choice to `remember()` and uses `withCookies()` to send Shield's
 cookie with the redirect.
 
-Shield issues the token after successful LDAP authentication and completion
-of any pending login action. CodeIgniter discovers the package's login event
-listener. If your application disables discovery of events from this package
-in **app/Config/Modules.php**, register the listener in **app/Config/Events.php**.
-
-```php
-\CodeIgniter\Events\Events::on(
-    'login',
-    \Maniaba\ShieldLDAP\Authentication\Authenticators\LDAP::rememberAfterAction(...),
-    \CodeIgniter\Events\Events::PRIORITY_HIGH,
-);
-```
-
-The `session` alias handles restoring and rotating the token.
+Shield's `Session::login()` issues the token when LDAP sign-in completes
+without a pending login action. Sign-ins that require a login action continue
+with a regular Shield session after the user completes the action. The
+`session` alias handles restoring and rotating remember-me tokens.
 [Account disabling and revocation](../guides/user_management.md#account-disabling-and-password-recovery)
 
 ## Test Sign-in

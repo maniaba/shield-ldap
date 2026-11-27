@@ -206,9 +206,9 @@ final class LDAPLoginTest extends DatabaseTestCase
             ->post('/auth/a/verify', ['token' => $identity->secret]);
 
         $verified->assertStatus(302);
-        $verified->assertCookie('remember');
+        $verified->assertCookieMissing('remember');
         $this->assertSame($this->user->id, auth('session')->id());
-        $this->seeNumRecords(1, $this->tables['remember_tokens'], ['user_id' => $this->user->id]);
+        $this->dontSeeInDatabase($this->tables['remember_tokens'], ['user_id' => $this->user->id]);
     }
 
     public function testReservedLocalAccountRequiresConfiguredMfaWithoutQueryingDirectory(): void

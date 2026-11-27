@@ -15,7 +15,6 @@ namespace Maniaba\ShieldLDAP\Authentication\Authenticators;
 
 use CodeIgniter\Events\Events;
 use CodeIgniter\HTTP\IncomingRequest;
-use CodeIgniter\HTTP\Response;
 use CodeIgniter\Shield\Authentication\Authenticators\Session;
 use CodeIgniter\Shield\Authentication\Passwords;
 use CodeIgniter\Shield\Entities\User;
@@ -33,11 +32,6 @@ use Maniaba\ShieldLDAP\Exceptions\LDAPException;
 class LDAP extends Session
 {
     private const DUMMY_PASSWORD_HASH = '$2y$12$lGwEWbbJHNlNehaFdwrcH.e7c0S3L2sMFVZr6LX/IHjU0ONwWzogq';
-
-    /**
-     * Shield session key for the user requesting a remember-me token after MFA.
-     */
-    private const PENDING_REMEMBER_USER_ID = 'ldap_pending_remember_user_id';
 
     private readonly AuthLDAP $ldapConfig;
     private readonly LDAPDirectoryInterface $directory;
@@ -118,51 +112,7 @@ class LDAP extends Session
             $user->touchIdentity($identity);
         }
 
-        if (! $local && $this->shouldRemember && setting('Auth.sessionConfig')['allowRemembering']) {
-            $this->setSessionUserKey(self::PENDING_REMEMBER_USER_ID, $user->id);
-        }
-
-        $this->remember(false);
-        $this->clearIncomingRememberCookie();
-
         return $result;
-    }
-
-    /**
-     * Issues a requested remember-me token after Shield completes a pending login action.
-     *
-     * Register with Shield's login event when event discovery is disabled.
-     */
-    public static function rememberAfterAction(User $user): void
-    {
-        $sessionConfig = setting('Auth.sessionConfig');
-        $sessionUser   = session($sessionConfig['field']);
-
-        if (! is_array($sessionUser) || ! isset($sessionUser[self::PENDING_REMEMBER_USER_ID], $sessionUser['id'])
-                                     || isset($sessionUser['auth_action']) || $user->id === null
-                                     || (string) $sessionUser[self::PENDING_REMEMBER_USER_ID] !== (string) $user->id
-                                     || (string) $sessionUser['id'] !== (string) $user->id
-        ) {
-            return;
-        }
-
-        $authenticator = auth('session')->getAuthenticator();
-        if (! $authenticator instanceof Session) {
-            return;
-        }
-
-        $authenticator->removeSessionUserKey(self::PENDING_REMEMBER_USER_ID);
-
-        if ($sessionConfig['allowRemembering'] && ! $user->isBanned() && $user->isActivated()) {
-            $authenticator->rememberUser($user);
-
-            if (random_int(1, 100) <= 20) {
-                $authenticator->rememberModel->purgeOldRememberTokens();
-            }
-
-            // Shield's action redirects use the shared redirect response.
-            redirect()->withCookies();
-        }
     }
 
     /**
@@ -210,22 +160,6 @@ class LDAP extends Session
         Events::trigger('failedLogin', ['username' => $identifier]);
 
         return $this->failedResult();
-    }
-
-    private function clearIncomingRememberCookie(): void
-    {
-        /** @var IncomingRequest $request */
-        $request    = service('request');
-        $cookieName = setting('Auth.sessionConfig')['rememberCookieName'];
-        $prefix     = setting('Cookie.prefix');
-
-        if ($request->getCookie($prefix . $cookieName) === null) {
-            return;
-        }
-
-        /** @var Response $response */
-        $response = service('response');
-        $response->deleteCookie($cookieName, setting('Cookie.domain'), setting('Cookie.path'), $prefix);
     }
 
     private function recordAttempt(string $identifier, ?User $user): void
