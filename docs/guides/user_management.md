@@ -52,14 +52,14 @@ standard login event.
 
 Use `shield:ldap-sync` from a trusted administrative shell to preview and apply
 provisioning and mapped profile updates in bulk.
-[Spark Commands](../commands/index.md#synchronize-users)
+[Synchronize Users](../commands/ldap-sync.md)
 
 ## Linking an Existing Shield User
 
 During migration, start with provisioning disabled. You can keep LDAP web
 sign-in disabled while using `shield:ldap-link` to preview and link accounts by
 username from a trusted administrative shell.
-[Spark Commands](../commands/index.md#link-existing-users)
+[Link Existing Users](../commands/ldap-link.md)
 
 ### Linking from Application Code
 
@@ -119,7 +119,7 @@ provisioned users and existing linked users, including when `updateProfile`
 is disabled.
 
 To refresh groups and profiles independently of sign-in, see
-[Move Sign-In Updates to Scheduled Commands](../commands/index.md#move-sign-in-updates-to-scheduled-commands).
+[Move Sign-In Updates to Scheduled Commands](../commands/ldap-sync.md#move-sign-in-updates-to-scheduled-commands).
 
 When group synchronization runs, the connection withdraws grants
 for groups the user has left or whose mappings were removed. If several
