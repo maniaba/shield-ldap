@@ -16,6 +16,8 @@ namespace Maniaba\ShieldLDAP\Config;
 use CodeIgniter\Config\BaseService;
 use CodeIgniter\Shield\Models\UserModel;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPDirectoryInterface;
+use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPGroupEnumerationInterface;
+use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPGroupSyncWorkflow;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPLinkService;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPLinkWorkflow;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPProfileSynchronizer;
@@ -135,5 +137,22 @@ class Services extends BaseService
         }
 
         return new LDAPSyncWorkflow(service('ldapUserEnumeration'), service('ldapProfileSynchronizer'));
+    }
+
+    /**
+     * Supplies the workflow for synchronizing only LDAP-managed Shield groups.
+     */
+    public static function ldapGroupSyncWorkflow(bool $getShared = true): LDAPGroupSyncWorkflow
+    {
+        if ($getShared) {
+            return self::getSharedInstance('ldapGroupSyncWorkflow');
+        }
+
+        $directory = service('ldapDirectory');
+        if (! $directory instanceof LDAPGroupEnumerationInterface) {
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
+        }
+
+        return new LDAPGroupSyncWorkflow($directory, auth()->getProvider());
     }
 }

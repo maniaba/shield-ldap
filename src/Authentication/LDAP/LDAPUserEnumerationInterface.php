@@ -26,7 +26,7 @@ interface LDAPUserEnumerationInterface extends LDAPDirectoryInterface
      * Returned attribute names are lowercase. The configured ID and profile
      * attributes are included when present.
      *
-     * @return iterable<int, array{dn: string, attributes: array<string, list<string>>}>
+     * @return iterable<int, array{dn: string, attributes: array<string, list<string>>, matchedGroups?: list<string>}>
      *
      * @throws LDAPException If a search fails or its results are incomplete.
      */

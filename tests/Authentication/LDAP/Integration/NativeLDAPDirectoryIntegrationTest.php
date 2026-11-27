@@ -121,6 +121,20 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
         }
     }
 
+    public function testScansMappedGroupMembershipsAcrossMultiplePages(): void
+    {
+        $connection = $this->connection(groupMappings: ['user' => 'cn=shield-users,' . self::GROUP_BASE_DN]);
+        $entries    = iterator_to_array((new NativeLDAPDirectory())->scanGroupMemberships($connection, 1));
+        $groups     = array_column($entries, 'matchedGroups', 'dn');
+
+        $this->assertSame(['user'], $groups['uid=alice,' . self::USER_BASE_DN]);
+        $this->assertSame([], $groups['uid=bob,' . self::USER_BASE_DN]);
+
+        foreach ($entries as $entry) {
+            $this->assertSame(['entryuuid'], array_keys($entry['attributes']));
+        }
+    }
+
     public function testRejectsWrongCertificateHostname(): void
     {
         $host = getenv('SHIELD_LDAP_TEST_WRONG_HOST');

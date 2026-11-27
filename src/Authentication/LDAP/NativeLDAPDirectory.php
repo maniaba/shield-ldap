@@ -23,7 +23,7 @@ use SensitiveParameter;
  *
  * @phpstan-type DirectoryEntry array{dn: string, attributes: array<string, list<string>>}
  */
-final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAPUserLookupInterface, LDAPUserEnumerationInterface
+final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAPUserLookupInterface, LDAPUserEnumerationInterface, LDAPGroupEnumerationInterface
 {
     private const TIME_LIMIT_EXCEEDED = 3;
     private const SIZE_LIMIT_EXCEEDED = 4;
@@ -166,7 +166,20 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
      */
     public function scanUsers(LDAPConnection $connection, int $pageSize = 100): LDAPUserScan
     {
-        return new LDAPUserScan(function () use ($connection, $pageSize): array {
+        return $this->scan($connection, $pageSize, false);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function scanGroupMemberships(LDAPConnection $connection, int $pageSize = 100): LDAPUserScan
+    {
+        return $this->scan($connection, $pageSize, true);
+    }
+
+    private function scan(LDAPConnection $connection, int $pageSize, bool $groupsOnly): LDAPUserScan
+    {
+        return new LDAPUserScan(function () use ($connection, $pageSize, $groupsOnly): array {
             if (! $connection->verifyCertificate) {
                 throw new LDAPException(LDAPReason::TlsVerificationRequired);
             }
@@ -181,12 +194,15 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
 
             $baseDn     = $connection->userBaseDn ?? $connection->baseDn;
             $filter     = LDAPFilter::all($connection->loginFilter, $connection->eligibilityFilter);
-            $attributes = array_values(array_unique([$connection->externalIdAttribute, ...array_values($connection->profileAttributes)]));
+            $attributes = [$connection->externalIdAttribute];
+            if (! $groupsOnly) {
+                $attributes = array_values(array_unique([...$attributes, ...array_values($connection->profileAttributes)]));
+            }
             $this->validateSearch($baseDn, $filter, $attributes);
 
             $ldap = $this->open($connection, true);
 
-            return [$ldap, $this->scanEntries($ldap, $connection, $baseDn, $filter, $attributes, $pageSize)];
+            return [$ldap, $this->scanEntries($ldap, $connection, $baseDn, $filter, $attributes, $pageSize, $groupsOnly)];
         });
     }
 
@@ -362,7 +378,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
      * @param list<string>|string $baseDn
      * @param list<string>        $attributes
      *
-     * @return iterable<int, DirectoryEntry>
+     * @return iterable<int, array{dn: string, attributes: array<string, list<string>>, matchedGroups?: list<string>}>
      */
     private function scanEntries(
         Connection $ldap,
@@ -371,6 +387,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
         string $filter,
         array $attributes,
         int $pageSize,
+        bool $groupsOnly,
     ): iterable {
         $pagesRemaining = self::MAX_SCAN_PAGES;
 
@@ -385,6 +402,12 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
                 $pagesRemaining--;
 
                 foreach ($this->search($ldap, $connection, $base, $filter, $attributes, $pageSize, pageCookie: $cookie) as $entry) {
+                    if ($groupsOnly) {
+                        $entry['matchedGroups'] = ($connection->groupMappings ?? []) === []
+                            ? []
+                            : $this->findMappedGroups($ldap, $connection, $entry['dn']);
+                    }
+
                     yield $entry;
                 }
             } while ($cookie !== '');

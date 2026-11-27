@@ -114,6 +114,70 @@ The command stages mapped profile values in memory up to PHP’s
 temporary directory. Use a restricted temporary directory on the host when
 processing sensitive profile attributes.
 
+## Synchronize Only Groups
+
+Use `--groups-only` to reconcile [mapped LDAP groups](../getting_started/configuration.md#map-ldap-groups-to-shield-groups)
+for existing Shield users linked to one connection. Run the preview, then use
+`--apply` to write the changes.
+
+```console
+php spark shield:ldap-sync corporate --groups-only
+php spark shield:ldap-sync corporate --groups-only --apply
+```
+
+This mode changes only LDAP group grants for eligible linked users. It
+preserves manual assignments and grants still backed by another connection.
+Provisioning and profile updates belong to the regular synchronization
+mode. Group-only synchronization skips reserved local accounts and users
+outside the eligible directory search results, including missing directory
+accounts. A failed or incomplete directory scan stops the run before any
+group changes are written.
+
+The native transport uses the configured service account over verified TLS.
+It checks direct membership against each mapped group DN and requests only
+the immutable ID from user entries. Apply the Shield LDAP grant table
+migration before running this mode. Use an explicit empty `groupMappings`
+array to withdraw this connection's grants for the eligible linked users
+returned by the scan.
+
+### Run Every Five Minutes with CodeIgniter Tasks
+
+Install CodeIgniter Tasks and publish its configuration. See the
+[CodeIgniter Tasks setup guide](https://tasks.codeigniter.com/latest/configuration/)
+for the runner and Settings configuration.
+
+```console
+composer require codeigniter4/tasks
+php spark tasks:publish
+```
+
+Add this task to `init()` in **app/Config/Tasks.php**.
+
+```php
+$schedule->command('shield:ldap-sync corporate --groups-only --apply')
+    ->everyFiveMinutes()
+    ->singleInstance();
+```
+
+Set up the Tasks runner in cron to dispatch scheduled tasks every minute.
+The LDAP task itself runs every five minutes.
+
+```cron
+* * * * * cd /srv/myapp && /usr/bin/php spark tasks:run >> writable/logs/tasks-cron.log 2>&1
+```
+
+### Run Directly from Cron
+
+Add this entry to the crontab for the application's service account. Adjust
+the application and PHP paths.
+
+```cron
+*/5 * * * * cd /srv/myapp && /usr/bin/php spark shield:ldap-sync corporate --groups-only --apply >> writable/logs/ldap-group-sync.log 2>&1
+```
+
+Use one scheduler per connection. When a run can take longer than the
+interval, use a lock such as `flock` on systems that provide it.
+
 ## Command Help
 
 Get the supported arguments and options in the terminal.
