@@ -32,8 +32,12 @@ use Maniaba\ShieldLDAP\Exceptions\LDAPException;
  */
 class LDAP extends Session
 {
-    private const REMEMBER_AFTER_ACTION = 'ldap_remember_after_action';
-    private const DUMMY_PASSWORD_HASH   = '$2y$12$lGwEWbbJHNlNehaFdwrcH.e7c0S3L2sMFVZr6LX/IHjU0ONwWzogq';
+    private const DUMMY_PASSWORD_HASH = '$2y$12$lGwEWbbJHNlNehaFdwrcH.e7c0S3L2sMFVZr6LX/IHjU0ONwWzogq';
+
+    /**
+     * Shield session key for the user requesting a remember-me token after MFA.
+     */
+    private const PENDING_REMEMBER_USER_ID = 'ldap_pending_remember_user_id';
 
     private readonly AuthLDAP $ldapConfig;
     private readonly LDAPDirectoryInterface $directory;
@@ -115,7 +119,7 @@ class LDAP extends Session
         }
 
         if (! $local && $this->shouldRemember && setting('Auth.sessionConfig')['allowRemembering']) {
-            $this->setSessionUserKey(self::REMEMBER_AFTER_ACTION, $user->id);
+            $this->setSessionUserKey(self::PENDING_REMEMBER_USER_ID, $user->id);
         }
 
         $this->remember(false);
@@ -134,9 +138,9 @@ class LDAP extends Session
         $sessionConfig = setting('Auth.sessionConfig');
         $sessionUser   = session($sessionConfig['field']);
 
-        if (! is_array($sessionUser) || ! isset($sessionUser[self::REMEMBER_AFTER_ACTION], $sessionUser['id'])
+        if (! is_array($sessionUser) || ! isset($sessionUser[self::PENDING_REMEMBER_USER_ID], $sessionUser['id'])
                                      || isset($sessionUser['auth_action']) || $user->id === null
-                                     || (string) $sessionUser[self::REMEMBER_AFTER_ACTION] !== (string) $user->id
+                                     || (string) $sessionUser[self::PENDING_REMEMBER_USER_ID] !== (string) $user->id
                                      || (string) $sessionUser['id'] !== (string) $user->id
         ) {
             return;
@@ -147,7 +151,7 @@ class LDAP extends Session
             return;
         }
 
-        $authenticator->removeSessionUserKey(self::REMEMBER_AFTER_ACTION);
+        $authenticator->removeSessionUserKey(self::PENDING_REMEMBER_USER_ID);
 
         if ($sessionConfig['allowRemembering'] && ! $user->isBanned() && $user->isActivated()) {
             $authenticator->rememberUser($user);
