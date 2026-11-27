@@ -144,7 +144,7 @@ final readonly class LDAPProfileSynchronizer
         $user     = $identity === null ? null : $this->identities->findUser($identity->user_id);
         $username = $profile['username'] ?? null;
 
-        if ($this->isReservedAccount($user, $username, $localAccounts)) {
+        if (LDAPIdentityPersistence::isReservedAccount($user, $username, $localAccounts)) {
             return ['status' => SyncStatus::Skipped, 'user' => $user, 'fields' => [], 'loginFailure' => LDAPReason::ReservedLocalAccount];
         }
 
@@ -181,26 +181,6 @@ final readonly class LDAPProfileSynchronizer
         };
 
         return ['status' => $status, 'user' => $user, 'fields' => $profile];
-    }
-
-    /**
-     * @param array<array-key, int|string> $localAccounts
-     */
-    private function isReservedAccount(?User $user, ?string $username, array $localAccounts): bool
-    {
-        $userId         = $user?->id;
-        $storedUsername = $user?->username;
-
-        foreach ($localAccounts as $localUsername => $localId) {
-            if (($userId !== null && (string) $userId === (string) $localId)
-                || ($username !== null && strcasecmp($username, (string) $localUsername) === 0)
-                || ($storedUsername !== null && strcasecmp($storedUsername, (string) $localUsername) === 0)
-            ) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

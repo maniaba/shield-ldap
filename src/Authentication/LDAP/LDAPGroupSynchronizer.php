@@ -31,7 +31,7 @@ final class LDAPGroupSynchronizer
     /**
      * @param list<string> $groups Group keys verified by this connection
      */
-    public function synchronize(BaseConnection $database, User $user, string $connectionId, array $groups): void
+    public function synchronize(BaseConnection $database, User $user, string $connectionId, array $groups, bool $apply = true): bool
     {
         $model  = model(GroupModel::class);
         $userId = $user->id;
@@ -48,9 +48,10 @@ final class LDAPGroupSynchronizer
             ->where('memberships.user_id', $userId)
             ->get()
             ->getResultArray();
-        $grants = $database->table($grantTable);
-        $source = hash('sha256', $connectionId);
-        $groups = array_unique($groups);
+        $grants  = $database->table($grantTable);
+        $source  = hash('sha256', $connectionId);
+        $groups  = array_unique($groups);
+        $changed = false;
 
         foreach ($memberships as $membership) {
             $group = $membership['group'];
@@ -66,6 +67,11 @@ final class LDAPGroupSynchronizer
                 continue;
             }
 
+            $changed = true;
+            if (! $apply) {
+                continue;
+            }
+
             $sources      = $matches ? [...$sources, $source] : array_diff($sources, [$source]);
             $membershipId = $membership['id'];
             $this->writeGrant($grants, $membershipId, (int) $membership['revision'], $sources);
@@ -78,6 +84,11 @@ final class LDAPGroupSynchronizer
         foreach (array_diff($groups, array_column($memberships, 'group')) as $group) {
             if ($group === '' || ! $model->isValidGroup($group)) {
                 throw new LDAPException(LDAPReason::InvalidConfiguration);
+            }
+
+            $changed = true;
+            if (! $apply) {
+                continue;
             }
 
             $key = self::grantKey($userId, $group);
@@ -101,7 +112,11 @@ final class LDAPGroupSynchronizer
             }
         }
 
-        $user->setGroupsCache($model->getForUser($user));
+        if ($apply) {
+            $user->setGroupsCache($model->getForUser($user));
+        }
+
+        return $changed;
     }
 
     /**

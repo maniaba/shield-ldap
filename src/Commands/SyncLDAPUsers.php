@@ -25,12 +25,13 @@ final class SyncLDAPUsers extends BaseCommand
 {
     protected $name        = 'shield:ldap-sync';
     protected $description = 'Preview or synchronize eligible LDAP users.';
-    protected $usage       = 'shield:ldap-sync <connection> [--apply]';
+    protected $usage       = 'shield:ldap-sync <connection> [--groups-only] [--apply]';
     protected $arguments   = [
         'connection' => 'LDAP connection ID from AuthLDAP.',
     ];
     protected $options = [
-        '--apply' => 'Apply the configured provisioning and profile updates.',
+        '--groups-only' => 'Synchronize only mapped groups for existing linked users.',
+        '--apply'       => 'Write the selected changes to Shield.',
     ];
 
     /**
@@ -42,10 +43,12 @@ final class SyncLDAPUsers extends BaseCommand
     {
         $connectionId = $params[0] ?? null;
         $apply        = array_key_exists('apply', $params);
+        $groupsOnly   = array_key_exists('groups-only', $params);
 
         if (! is_string($connectionId) || $connectionId === ''
                                        || ($apply && $params['apply'] !== null)
-                                       || array_diff_key($params, [0 => true, 'apply' => true]) !== []
+                                       || ($groupsOnly && $params['groups-only'] !== null)
+                                       || array_diff_key($params, [0 => true, 'apply' => true, 'groups-only' => true]) !== []
         ) {
             $this->error($this->usage);
 
@@ -58,6 +61,19 @@ final class SyncLDAPUsers extends BaseCommand
 
             if ($connection->id !== $connectionId) {
                 throw new LDAPException(LDAPReason::InvalidConfiguration);
+            }
+
+            if ($groupsOnly) {
+                $totals = service('ldapGroupSyncWorkflow')->run($connection, $config->localAccounts, $apply);
+                $this->write(sprintf(
+                    'Groups summary: %s=%d unchanged=%d skipped=%d',
+                    $this->displayStatus(SyncStatus::Update, $apply),
+                    $totals['update'],
+                    $totals['unchanged'],
+                    $totals['skipped'],
+                ));
+
+                return EXIT_SUCCESS;
             }
 
             $completed = service('ldapSyncWorkflow')->run(

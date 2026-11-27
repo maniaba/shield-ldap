@@ -154,6 +154,11 @@ Return an empty list when no configured group matches.
 Throw `LDAPException` with a reason code instead of passing native exceptions
 or credentials to the application.
 
+To support [group-only synchronization](../commands/index.md#synchronize-only-groups),
+implement `LDAPGroupEnumerationInterface`. Return eligible entries with their
+immutable IDs and a `matchedGroups` list, including entries with zero matches.
+Report incomplete enumeration or membership checks with `LDAPException`.
+
 For `shield:ldap-link`, provide
 `Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserLookupInterface`. The
 package's `ldapUserLookup()` service uses this capability on the configured

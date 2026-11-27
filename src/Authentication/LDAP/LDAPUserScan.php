@@ -21,7 +21,7 @@ use LDAP\Connection;
 /**
  * A single-pass directory scan that owns its connection during iteration.
  *
- * @phpstan-type DirectoryEntry array{dn: string, attributes: array<string, list<string>>}
+ * @phpstan-type DirectoryEntry array{dn: string, attributes: array<string, list<string>>, matchedGroups?: list<string>}
  *
  * @implements IteratorAggregate<int, DirectoryEntry>
  */

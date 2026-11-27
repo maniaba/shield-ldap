@@ -86,6 +86,28 @@ final readonly class LDAPIdentityPersistence
     }
 
     /**
+     * Check whether a local account or a mapped username is reserved.
+     *
+     * @param array<array-key, int|string> $localAccounts
+     */
+    public static function isReservedAccount(?User $user, ?string $username, array $localAccounts): bool
+    {
+        $userId         = $user?->id;
+        $storedUsername = $user?->username;
+
+        foreach ($localAccounts as $localUsername => $localId) {
+            if (($userId !== null && (string) $userId === (string) $localId)
+                || ($username !== null && strcasecmp($username, (string) $localUsername) === 0)
+                || ($storedUsername !== null && strcasecmp($storedUsername, (string) $localUsername) === 0)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Store the link and verify its owner before the calling transaction commits.
      */
     public function create(string $connectionId, string $key, int|string $userId): void
