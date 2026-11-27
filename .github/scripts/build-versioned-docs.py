@@ -48,7 +48,7 @@ def deploy_release(version, tag):
             run("git", "worktree", "remove", str(source))
 
 
-def export_site(output):
+def export_site(output, version):
     output.mkdir(parents=True)
     with TemporaryFile() as archive:
         subprocess.run(["git", "archive", "gh-pages"], stdout=archive, check=True)
@@ -56,8 +56,13 @@ def export_site(output):
         with tarfile.open(fileobj=archive) as site:
             site.extractall(output, filter="data")
 
-    # Keep public URLs that predate versioned documentation working.
     version_root = output / "latest"
+    latest_index = version_root / "index.html"
+    selected_index = output / version / "index.html"
+    if not latest_index.is_file() or latest_index.read_bytes() != selected_index.read_bytes():
+        raise RuntimeError(f"The /latest/ guide does not match the selected version {version}.")
+
+    # Keep public URLs that predate versioned documentation working.
     for page in version_root.rglob("*/index.html"):
         relative = page.relative_to(version_root)
         legacy_page = output / relative
@@ -96,7 +101,7 @@ def build(output):
         run("mike", "alias", "--update-aliases", version, "latest")
 
     run("mike", "set-default", "latest")
-    export_site(output)
+    export_site(output, version)
 
 
 if __name__ == "__main__":
