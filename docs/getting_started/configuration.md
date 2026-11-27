@@ -175,7 +175,14 @@ a single match across the selected bases before it verifies the password. See th
 
 ## Map LDAP Groups to Shield Groups
 
-Set `groupMappings` on each connection that should grant Shield groups. Use a
+Run the migrations after installing Shield to create the table that records
+LDAP group assignments.
+
+```console
+php spark migrate --all
+```
+
+Set `groupMappings` on each connection that should manage Shield groups. Use a
 key from `Config\AuthGroups::$groups` on the left and the full DN of an LDAP
 group entry on the right.
 
@@ -197,6 +204,10 @@ for Active Directory `group` and OpenLDAP `groupOfNames` entries, and direct
 groups and membership inherited through nested groups are outside this lookup.
 See [Group assignments](../guides/user_management.md#authorization) for how
 assignments are stored.
+
+Set `groupMappings` to an empty array to revoke this connection's previous
+grants on each user's next LDAP sign-in. Omitting the option or setting it to
+`null` disables group management for that connection.
 
 ## Environment Overrides
 

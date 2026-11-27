@@ -29,7 +29,8 @@
     "autoload": {
         "psr-4": {
             "Maniaba\\ShieldLDAP\\": "src/"
-        }
+        },
+        "exclude-from-classmap": ["**/Database/Migrations/**"]
     },
     "autoload-dev": {
         "psr-4": {

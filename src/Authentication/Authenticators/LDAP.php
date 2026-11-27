@@ -193,7 +193,7 @@ class LDAP extends Session
             throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
-        $configuredGroups = array_keys($connection->groupMappings);
+        $configuredGroups = array_keys($connection->groupMappings ?? []);
 
         if ($configuredGroups !== [] && array_diff($configuredGroups, array_keys(setting('AuthGroups.groups'))) !== []) {
             throw new LDAPException(LDAPReason::InvalidConfiguration);
@@ -222,7 +222,7 @@ class LDAP extends Session
             $connection->eligibilityFilter,
         );
 
-        $matchedGroups = [];
+        $matchedGroups = $connection->groupMappings === [] ? [] : null;
 
         if ($configuredGroups !== []) {
             $matchedGroups = $entry['matchedGroups'] ?? throw new LDAPException(LDAPReason::InvalidConfiguration);

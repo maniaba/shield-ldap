@@ -118,9 +118,16 @@ to eligible users during LDAP password sign-in. The mapping applies to both
 provisioned users and existing linked users, including when `updateProfile`
 is disabled.
 
-Assignments are additive and persist in Shield. If someone leaves an LDAP
-group, remove their corresponding Shield assignment separately to revoke it.
-An existing Shield group assignment also survives removal of its LDAP mapping.
+On the next successful LDAP password sign-in, the connection withdraws grants
+for groups the user has left or whose mappings were removed. If several
+connections have granted the same group, the assignment remains until each
+of those connections withdraws its grant on a subsequent sign-in.
+
+Shield LDAP records only the group rows it creates. Existing manual
+assignments and Shield's default group stay under Shield's control, including
+manual assignments that overlap a mapping. To take manual ownership of a group
+already granted by LDAP, remove and re-add it in Shield. Shield's `addGroup()`
+method leaves an existing assignment as it is.
 
 ## Account Disabling and Password Recovery
 

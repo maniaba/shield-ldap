@@ -13,9 +13,7 @@ declare(strict_types=1);
 
 namespace Maniaba\ShieldLDAP\Authentication\LDAP;
 
-use CodeIgniter\I18n\Time;
 use CodeIgniter\Shield\Entities\User;
-use CodeIgniter\Shield\Models\GroupModel;
 use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Shield\Models\UserModel;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
@@ -42,7 +40,7 @@ final readonly class LDAPProfileSynchronizer
      *
      * @param array<string, string|null>   $profile
      * @param array<array-key, int|string> $localAccounts
-     * @param list<string>                 $groups        Verified Shield group keys
+     * @param list<string>|null            $groups        Verified Shield group keys
      */
     public function resolve(
         string $connectionId,
@@ -51,7 +49,7 @@ final readonly class LDAPProfileSynchronizer
         bool $provision = false,
         bool $updateProfile = true,
         array $localAccounts = [],
-        array $groups = [],
+        ?array $groups = null,
     ): User {
         $key     = LDAPIdentityPersistence::key($connectionId, $externalId);
         $profile = $this->validateProfile($profile);
@@ -65,8 +63,8 @@ final readonly class LDAPProfileSynchronizer
 
             $user = $this->saveProfile($connectionId, $key, $change['user'], $change['fields']);
 
-            if ($groups !== [] && ! $user->isBanned() && $user->isActivated()) {
-                $this->assignGroups($user, $groups);
+            if ($groups !== null && ! $user->isBanned() && $user->isActivated()) {
+                (new LDAPGroupSynchronizer())->synchronize($this->users->builder()->db(), $user, $connectionId, $groups);
             }
 
             return $user;
@@ -254,38 +252,6 @@ final readonly class LDAPProfileSynchronizer
         $this->users->update($userId, $profile);
 
         return $this->readBackProfile($userId, $profile);
-    }
-
-    /**
-     * @param non-empty-list<string> $groups
-     */
-    private function assignGroups(User $user, array $groups): void
-    {
-        $model = model(GroupModel::class);
-
-        if ($this->users->builder()->db() !== $model->builder()->db()) {
-            throw new LDAPException(LDAPReason::SynchronizationConflict);
-        }
-
-        $existing = $model->getForUser($user);
-        $missing  = array_diff(array_unique($groups), $existing);
-        $rows     = [];
-        $now      = Time::now();
-
-        foreach ($missing as $group) {
-            if ($group === '' || ! $model->isValidGroup($group)) {
-                throw new LDAPException(LDAPReason::InvalidConfiguration);
-            }
-
-            $rows[] = ['user_id' => $user->id, 'group' => $group, 'created_at' => $now];
-        }
-
-        // Insert only new memberships. Shield's User::addGroup() rewrites the group set.
-        if ($rows !== [] && $model->insertBatch($rows) !== count($rows)) {
-            throw new LDAPException(LDAPReason::SynchronizationConflict);
-        }
-
-        $user->setGroupsCache([...$existing, ...array_values($missing)]);
     }
 
     /**

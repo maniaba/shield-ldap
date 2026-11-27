@@ -109,7 +109,7 @@ operation and show the operator only the information needed for diagnosis.
 !!! note
 
     `auth('ldap')->check()` resolves a Shield user and may provision the user,
-    update their profile, or grant mapped groups. For application sign-in, use
+    update their profile, or reconcile mapped groups. For application sign-in, use
     `auth('ldap')->attempt()` and
     complete the configured Shield login actions. See the
     [LDAP login quick start](../quick_start_guide/using_ldap_auth.md).

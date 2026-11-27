@@ -96,7 +96,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
 
             $verified = $this->readEligibleEntry($ldap, $connection, $entry, $eligibility, $attributes);
 
-            if ($connection->groupMappings !== []) {
+            if (($connection->groupMappings ?? []) !== []) {
                 $verified['matchedGroups'] = $this->findMappedGroups($ldap, $connection, $verified['dn']);
             }
 
@@ -123,7 +123,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
         );
         $matched = [];
 
-        foreach ($connection->groupMappings as $group => $dn) {
+        foreach ($connection->groupMappings ?? [] as $group => $dn) {
             if ($this->search($ldap, $connection, $dn, $filter, [], 1, true) !== []) {
                 $matched[] = $group;
             }

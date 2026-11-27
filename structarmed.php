@@ -17,6 +17,8 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 
 return Architecture::define()
     ->withPresets(Preset::PSR4(), Preset::CODEQUALITY())
+    // CodeIgniter discovers migration classes in timestamp-prefixed files.
+    ->skip(['psr4.classes.must_match_composer' => 'src/Database/Migrations/*.php'])
     ->cacheDirectory(__DIR__ . '/build/structarmed')
     ->layer('tests', __DIR__ . '/tests')
     ->rule('tests.must_be_final', new MustBeFinalRule(layer: 'tests'));
