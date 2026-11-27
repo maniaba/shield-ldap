@@ -71,6 +71,24 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
         $this->assertSame(['alice'], $entry['attributes']['uid']);
     }
 
+    public function testLooksUpAnEligibleDirectoryIdentityForLinking(): void
+    {
+        $connection = $this->connection();
+        $directory  = new NativeLDAPDirectory();
+        $baseDns    = [self::GROUP_BASE_DN, self::BASE_DN, self::USER_BASE_DN];
+
+        $entry = $directory->lookupUser($connection, $baseDns, '(uid=alice)', '(objectClass=person)');
+
+        $this->assertSame('uid=alice,' . self::USER_BASE_DN, $entry['dn']);
+        $this->assertSame(['entryuuid'], array_keys($entry['attributes']));
+        $this->assertMatchesRegularExpression('/\A[a-f0-9-]{36}\z/', $entry['attributes']['entryuuid'][0]);
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('ineligible_user');
+
+        $directory->lookupUser($connection, $baseDns, '(uid=alice)', '(uid=bob)');
+    }
+
     public function testRejectsWrongCertificateHostname(): void
     {
         $host = getenv('SHIELD_LDAP_TEST_WRONG_HOST');

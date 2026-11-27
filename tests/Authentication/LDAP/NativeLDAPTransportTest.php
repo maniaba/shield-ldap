@@ -234,6 +234,75 @@ final class NativeLDAPTransportTest extends TestCase
         }
     }
 
+    public function testLookupConfirmsTheEligibleIdentityWithOneServiceBind(): void
+    {
+        $connection = $this->connection();
+        $externalId = "\0(*\\)";
+
+        NativeLDAPStub::$entriesByBase = [
+            self::BASE_DN         => [self::SECOND_ENTRY_DN],
+            self::SECOND_BASE_DN  => [self::SECOND_ENTRY_DN],
+            self::SECOND_ENTRY_DN => [self::SECOND_ENTRY_DN],
+        ];
+        NativeLDAPStub::$attributesByDn = [self::SECOND_ENTRY_DN => [
+            'entryuuid' => [$externalId],
+            'mail'      => ['alice@example.test'],
+        ]];
+
+        $entry = (new NativeLDAPDirectory())->lookupUser($connection, [self::BASE_DN, self::SECOND_BASE_DN], '(uid=alice)', '(objectClass=person)');
+
+        $this->assertSame(['dn' => self::SECOND_ENTRY_DN, 'attributes' => ['entryuuid' => [$externalId]]], $entry);
+        $this->assertSame([
+            ['bind', $connection->bindDn],
+            ['search', self::BASE_DN],
+            ['search', self::SECOND_BASE_DN],
+            ['read', self::SECOND_ENTRY_DN],
+        ], NativeLDAPStub::$operations);
+        $this->assertSame([
+            ['filter' => '(uid=alice)', 'attributes' => ['entryUUID']],
+            ['filter' => '(uid=alice)', 'attributes' => ['entryUUID']],
+            ['filter' => '(&(uid=alice)(objectClass=person)(entryUUID=\00\28\2a\5c\29))', 'attributes' => ['entryUUID']],
+        ], NativeLDAPStub::$queries);
+        $this->assertSame(1, NativeLDAPStub::$unbound);
+    }
+
+    public function testLookupRejectsAmbiguityBeforeApplyingEligibility(): void
+    {
+        $connection = $this->connection();
+
+        NativeLDAPStub::$entriesByBase = [
+            self::FIRST_BASE_DN  => [self::FIRST_ENTRY_DN],
+            self::SECOND_BASE_DN => [self::SECOND_ENTRY_DN],
+        ];
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('ambiguous_user');
+
+        try {
+            (new NativeLDAPDirectory())->lookupUser($connection, [self::FIRST_BASE_DN, self::SECOND_BASE_DN], '(uid=alice)', '(objectClass=person)');
+        } finally {
+            $this->assertSame([
+                ['bind', $connection->bindDn],
+                ['search', self::FIRST_BASE_DN],
+                ['search', self::SECOND_BASE_DN],
+            ], NativeLDAPStub::$operations);
+            $this->assertSame(['(uid=alice)', '(uid=alice)'], array_column(NativeLDAPStub::$queries, 'filter'));
+            $this->assertSame(1, NativeLDAPStub::$unbound);
+        }
+    }
+
+    public function testLookupRequiresCertificateVerificationBeforeOpeningAnEndpoint(): void
+    {
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('tls_verification_required');
+
+        try {
+            (new NativeLDAPDirectory())->lookupUser($this->connection(verifyCertificate: false), self::BASE_DN, '(uid=alice)');
+        } finally {
+            $this->assertSame([], NativeLDAPStub::$connected);
+        }
+    }
+
     #[DataProvider('provideRetriesAlternativeEndpointOnTransportFailure')]
     public function testRetriesAlternativeEndpointOnTransportFailure(int $code): void
     {
@@ -361,7 +430,7 @@ final class NativeLDAPTransportTest extends TestCase
         }
     }
 
-    private function connection(): LDAPConnection
+    private function connection(bool $verifyCertificate = true): LDAPConnection
     {
         return new LDAPConnection(
             'test',
@@ -369,6 +438,7 @@ final class NativeLDAPTransportTest extends TestCase
             self::BASE_DN,
             'cn=reader,dc=example,dc=test',
             'readerPassword!',
+            verifyCertificate: $verifyCertificate,
         );
     }
 }

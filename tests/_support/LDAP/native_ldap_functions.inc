@@ -115,7 +115,7 @@ function ldap_search(Connection $connection, string $base, string $filter, array
 {
     NativeLDAPStub::$operations[] = ['search', $base];
 
-    return scriptedSearch($base);
+    return scriptedSearch($base, $filter, $attributes);
 }
 
 /**
@@ -125,11 +125,16 @@ function ldap_read(Connection $connection, string $base, string $filter, array $
 {
     NativeLDAPStub::$operations[] = ['read', $base];
 
-    return scriptedSearch($base);
+    return scriptedSearch($base, $filter, $attributes);
 }
 
-function scriptedSearch(string $base): false|stdClass
+/**
+ * @param list<string> $attributes
+ */
+function scriptedSearch(string $base, string $filter, array $attributes): false|stdClass
 {
+    NativeLDAPStub::$queries[] = ['filter' => $filter, 'attributes' => $attributes];
+
     $code                      = NativeLDAPStub::$searchCodesByBase[$base] ?? NativeLDAPStub::$searchCode;
     NativeLDAPStub::$lastError = $code;
 

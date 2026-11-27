@@ -113,25 +113,55 @@ final readonly class LDAPUserResolver
     /**
      * Explicitly associate a verified directory ID with a selected Shield user.
      *
-     * The caller must authorize the link and verify the external ID. The
-     * resolver never selects the local account by a directory profile value.
+     * The caller must authorize the link and verify the external ID. For a
+     * username-based link, provide the expected local username to verify it at
+     * write time and refuse a different existing link on this connection.
      */
-    public function link(string $connectionId, string $externalId, int|string $userId): User
+    public function link(string $connectionId, string $externalId, int|string $userId, ?string $expectedUsername = null): User
     {
         $key = $this->identityKey($connectionId, $externalId);
 
-        return $this->atomically(function () use ($connectionId, $key, $userId): User {
-            $user     = $this->findUser($userId);
-            $identity = $this->identities->getIdentityBySecret(self::ID_TYPE, $key);
+        return $this->atomically(function () use ($connectionId, $key, $userId, $expectedUsername): User {
+            $user = $this->findUser($userId);
 
-            if ($identity === null) {
-                $this->createIdentity($connectionId, $key, $userId);
-            } elseif ((string) $identity->user_id !== (string) $user->id) {
+            if ($expectedUsername !== null && $user->username !== $expectedUsername) {
                 throw new LDAPException('identity_conflict');
+            }
+
+            if (! $this->hasMatchingLink($user, $connectionId, $key, $expectedUsername !== null)) {
+                $this->createIdentity($connectionId, $key, $userId);
             }
 
             return $user;
         });
+    }
+
+    /**
+     * Check whether a proposed username-based link already exists.
+     *
+     * @throws LDAPException If either side already has a conflicting link.
+     */
+    public function isLinked(User $user, string $connectionId, string $externalId): bool
+    {
+        return $this->hasMatchingLink($user, $connectionId, $this->identityKey($connectionId, $externalId), true);
+    }
+
+    /**
+     * Read the configured immutable identifier and normalize binary Active Directory GUIDs.
+     *
+     * @param array<string, list<string>> $attributes
+     */
+    public static function externalId(LDAPConnection $connection, array $attributes): string
+    {
+        $ids = $attributes[strtolower($connection->externalIdAttribute)] ?? [];
+
+        if (count($ids) !== 1 || $ids[0] === '') {
+            throw new LDAPException('invalid_identity');
+        }
+
+        return strcasecmp($connection->externalIdAttribute, 'objectGUID') === 0
+            ? self::normalizeObjectGuid($ids[0])
+            : $ids[0];
     }
 
     /**
@@ -148,6 +178,24 @@ final readonly class LDAPUserResolver
             . '-' . bin2hex(strrev(substr($bytes, 6, 2)))
             . '-' . bin2hex(substr($bytes, 8, 2))
             . '-' . bin2hex(substr($bytes, 10));
+    }
+
+    private function hasMatchingLink(User $user, string $connectionId, string $key, bool $checkUserLinks): bool
+    {
+        $identity = $this->identities->getIdentityBySecret(self::ID_TYPE, $key);
+        if ($identity !== null && (string) $identity->user_id !== (string) $user->id) {
+            throw new LDAPException('identity_conflict');
+        }
+
+        if ($checkUserLinks) {
+            foreach ($this->identities->getIdentitiesByTypes($user, [self::ID_TYPE]) as $localIdentity) {
+                if ($localIdentity->name === $connectionId && $localIdentity->secret !== $key) {
+                    throw new LDAPException('identity_conflict');
+                }
+            }
+        }
+
+        return $identity !== null;
     }
 
     private function identityKey(string $connectionId, string $externalId): string

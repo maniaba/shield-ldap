@@ -45,10 +45,45 @@ profile field such as `directory_email`.
 
 ## Linking an Existing Shield User
 
-During migration, start with provisioning disabled. In a trusted operator
-workflow, verify the directory account and select the Shield user who owns
-it. Then create the link using the verified external identifier and
-selected Shield user ID.
+During migration, start with provisioning disabled. You can keep LDAP web
+sign-in disabled while preparing links from a trusted administrative shell.
+
+### Linking by Username with Spark
+
+Preview candidates for the `corporate` connection. The first command scans
+Shield users in batches. The second checks one Shield username. Both print
+matching directory identifiers and the status for each account in read-only
+mode.
+
+```console
+php spark shield:ldap-link corporate
+php spark shield:ldap-link corporate alex.rivera
+```
+
+The lookup uses the directory attribute configured in
+`profileAttributes['username']`. If there is no username mapping, the
+connection must have exactly one `loginAttributes` entry. The command uses
+the service account over verified TLS, applies `loginFilter` and
+`eligibilityFilter`, and checks for a unique match across all configured user
+search bases. It skips reserved local accounts and rejects conflicting links.
+
+Verify that the directory account belongs to the person who owns the Shield
+account, then apply the link for that username.
+
+```console
+php spark shield:ldap-link corporate alex.rivera --apply
+```
+
+`--apply` requires an explicit username and repeats the directory lookup. It
+stores only the LDAP identity link, keyed by the connection and the immutable
+directory identifier, such as the normalized AD `objectGUID` or an OpenLDAP
+`entryUUID`.
+
+### Linking from Application Code
+
+For accounts with different usernames, verify the directory account in a
+trusted operator workflow and link its immutable identifier to the Shield user
+ID.
 
 ```php
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;

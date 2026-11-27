@@ -22,7 +22,7 @@ use SensitiveParameter;
  *
  * @phpstan-type DirectoryEntry array{dn: string, attributes: array<string, list<string>>}
  */
-final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface
+final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAPUserLookupInterface
 {
     private const TIME_LIMIT_EXCEEDED = 3;
     private const SIZE_LIMIT_EXCEEDED = 4;
@@ -84,28 +84,43 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface
 
         try {
             $entry       = $this->findExactlyOne($ldap, $connection, $baseDn, $filter, $attributes);
-            $idAttribute = strtolower($connection->externalIdAttribute);
-            $ids         = $entry['attributes'][$idAttribute] ?? [];
-
-            if (count($ids) !== 1 || $ids[0] === '') {
-                throw new LDAPException('invalid_external_identity');
-            }
-
-            $sameIdentity = LDAPFilter::equal($connection->externalIdAttribute, $ids[0]);
-            $eligibility  = LDAPFilter::all($filter, $eligibilityFilter, $sameIdentity);
+            $eligibility = $this->eligibleEntryFilter($connection, $entry, $filter, $eligibilityFilter);
 
             // Keep all three binds on the selected endpoint, including behind load balancers.
             // Any failure terminates this connection in the finally block.
             $this->bind($ldap, $entry['dn'], $password, false);
             $this->bind($ldap, $connection->bindDn, $connection->bindPassword(), true);
 
-            $verified = $this->findExactlyOne($ldap, $connection, $entry['dn'], $eligibility, $attributes, true);
+            return $this->readEligibleEntry($ldap, $connection, $entry, $eligibility, $attributes);
+        } finally {
+            ldap_unbind($ldap);
+        }
+    }
 
-            if (($verified['attributes'][$idAttribute] ?? []) !== $ids) {
-                throw new LDAPException('directory_identity_changed');
-            }
+    /**
+     * {@inheritDoc}
+     */
+    public function lookupUser(
+        LDAPConnection $connection,
+        array|string $baseDn,
+        string $filter,
+        string $eligibilityFilter = '(objectClass=*)',
+    ): array {
+        if (! $connection->verifyCertificate) {
+            throw new LDAPException('tls_verification_required');
+        }
 
-            return $verified;
+        $attributes = [$connection->externalIdAttribute];
+        $this->validateSearch($baseDn, $filter, $attributes);
+        LDAPFilter::validate($eligibilityFilter);
+
+        $ldap = $this->open($connection, true);
+
+        try {
+            $entry       = $this->findExactlyOne($ldap, $connection, $baseDn, $filter, $attributes);
+            $eligibility = $this->eligibleEntryFilter($connection, $entry, $filter, $eligibilityFilter);
+
+            return $this->readEligibleEntry($ldap, $connection, $entry, $eligibility, $attributes);
         } finally {
             ldap_unbind($ldap);
         }
@@ -245,6 +260,38 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface
             ?? (! $serviceAccount && $code === self::INVALID_CREDENTIALS
                 ? 'invalid_credentials'
                 : ($serviceAccount ? 'service_bind_failed' : 'user_bind_failed')));
+    }
+
+    /**
+     * @param DirectoryEntry $entry
+     */
+    private function eligibleEntryFilter(LDAPConnection $connection, array $entry, string $filter, string $eligibilityFilter): string
+    {
+        $ids = $entry['attributes'][strtolower($connection->externalIdAttribute)] ?? [];
+
+        if (count($ids) !== 1 || $ids[0] === '') {
+            throw new LDAPException('invalid_external_identity');
+        }
+
+        return LDAPFilter::all($filter, $eligibilityFilter, LDAPFilter::equal($connection->externalIdAttribute, $ids[0]));
+    }
+
+    /**
+     * @param DirectoryEntry $entry
+     * @param list<string>   $attributes
+     *
+     * @return DirectoryEntry
+     */
+    private function readEligibleEntry(Connection $ldap, LDAPConnection $connection, array $entry, string $filter, array $attributes): array
+    {
+        $idAttribute = strtolower($connection->externalIdAttribute);
+        $verified    = $this->findExactlyOne($ldap, $connection, $entry['dn'], $filter, $attributes, true);
+
+        if (($verified['attributes'][$idAttribute] ?? []) !== $entry['attributes'][$idAttribute]) {
+            throw new LDAPException('directory_identity_changed');
+        }
+
+        return $verified;
     }
 
     /**
