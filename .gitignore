@@ -1,5 +1,7 @@
 /vendor/
+/.venv/
 /build/
+/site/
 /tmp/
 /writable/
 /composer.lock

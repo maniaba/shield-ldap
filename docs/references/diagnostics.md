@@ -1,0 +1,135 @@
+# Directory Diagnostics
+
+Use the `ldapDirectory` service from an administrative command or another
+trusted application workflow. It exposes connectivity, service-account bind,
+bounded search, and directory credential checks.
+
+!!! important
+
+    Apply authorization, CSRF protection, and rate limiting to any web interface
+    that calls these methods. Limit operators to approved connection IDs,
+    search bases, and attributes. Keep results, submitted passwords, and
+    native directory error details out of application logs.
+
+## Check a Connection
+
+```php
+use Maniaba\ShieldLDAP\Config\AuthLDAP;
+use Maniaba\ShieldLDAP\Exceptions\LDAPException;
+
+/** @var AuthLDAP $config */
+$config = config('AuthLDAP');
+
+$connectionIds = $config->connectionIds();
+$directory     = service('ldapDirectory');
+
+try {
+    $connection = $config->getConnection('corporate');
+    $directory->testConnection($connection);
+    $directory->testBind($connection);
+} catch (LDAPException $exception) {
+    log_message('warning', 'LDAP connection check failed ({reason}).', ['reason' => $exception->reason]);
+}
+```
+
+`testConnection()` checks connectivity with TLS verification. For LDAPS, the
+native transport uses an anonymous Root DSE query to trigger the handshake.
+`testBind()` establishes a connection and verifies the service-account
+credentials. Both return after success and throw `LDAPException` on failure.
+The exception's `reason` property contains a diagnostic code suitable for
+operator logs. See [Troubleshooting](../guides/troubleshooting.md) for how to
+interpret connection and sign-in failures.
+
+## Preview Directory Entries
+
+The following example requests display names from a configured Active
+Directory user search. Use a trusted group search base and group filter with
+the same method to inspect group entries.
+
+```php
+use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPFilter;
+
+$entries = $directory->preview(
+    $connection,
+    $connection->userBaseDn ?? $connection->baseDn,
+    LDAPFilter::all($connection->loginFilter, $connection->eligibilityFilter),
+    ['sAMAccountName', 'displayName'],
+    20,
+);
+```
+
+The native transport accepts a limit from 1 to 100 and up to 64 attribute
+names. Pass an empty attribute list for DNs alone. Each result has a `dn`
+and an `attributes` map with lowercase attribute names and lists of values.
+Values such as `objectGUID` may be binary.
+
+A full page of results can indicate that the limit was reached. Use the method
+only to sample entries. Search referrals and unexpected partial results raise
+an `LDAPException`.
+
+## Check a User's Directory Credentials
+
+Use the directory service to check a password and eligibility without creating
+a Shield session or updating a Shield account. The application supplies the
+trusted connection and a login identifier and password from the operator's
+request.
+
+```php
+use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPFilter;
+
+$matches = [];
+
+foreach ($connection->loginAttributes as $attribute) {
+    $matches[] = LDAPFilter::equal($attribute, $identifier);
+}
+
+$entry = $directory->authenticate(
+    $connection,
+    $connection->userBaseDn ?? $connection->baseDn,
+    LDAPFilter::all($connection->loginFilter, LDAPFilter::any(...$matches)),
+    [],
+    $password,
+    $connection->eligibilityFilter,
+);
+```
+
+The native implementation returns the verified entry and includes the
+configured immutable ID attribute in the result. It throws `LDAPException`
+if it cannot verify a single eligible user. Discard the password after the
+operation and show the operator only the information needed for diagnosis.
+
+!!! note
+
+    `auth('ldap')->check()` resolves a Shield user and may provision or update
+    that user. For application sign-in, use `auth('ldap')->attempt()` and
+    complete the configured Shield login actions. See the
+    [LDAP login quick start](../quick_start_guide/using_ldap_auth.md).
+
+## Custom Connection Providers
+
+Extend the package's `AuthLDAP` config in **app/Config/AuthLDAP.php** and
+override `getConnection(string $id): LDAPConnection` and
+`connectionIds(): array` to load settings from your application.
+In `getConnection()`, resolve the requested ID and read the service password
+from the application's secret store. Pass the password as a string to
+`LDAPConnection` with the same ID that was requested. Use
+`LDAPException('invalid_configuration')` for unrecognized IDs.
+
+This allows the application to keep the password outside CodeIgniter's config
+cache. Return only connection IDs or approved operational metadata to an
+administrator interface.
+
+## Replacing the Transport
+
+CodeIgniter discovers the package's `ldapDirectory` service automatically.
+To provide a different directory transport, implement
+`Maniaba\ShieldLDAP\Authentication\LDAP\LDAPDirectoryInterface` and declare
+a `ldapDirectory()` service in **app/Config/Services.php**. Follow the
+[CodeIgniter Services guide](https://codeigniter.com/user_guide/concepts/services.html).
+
+An implementation used for sign-in must verify the submitted password over
+a trusted encrypted connection, require one matching user, and recheck the
+same immutable identity against the eligibility filter. Return the entry DN
+and the requested attribute values using lowercase keys and lists of strings.
+Throw `LDAPException` with a reason code instead of passing native exceptions
+or credentials to the application.

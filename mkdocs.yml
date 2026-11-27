@@ -1,0 +1,69 @@
+site_name: Shield LDAP
+site_description: LDAP and Active Directory authentication for CodeIgniter Shield
+site_url: https://maniaba.github.io/shield-ldap/
+repo_url: https://github.com/maniaba/shield-ldap
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  font:
+    text: Raleway
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep orange
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep orange
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.action.edit
+    - content.code.copy
+    - navigation.footer
+    - navigation.instant
+    - navigation.top
+    - search.highlight
+    - search.share
+    - search.suggest
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+plugins:
+  - search
+
+validation:
+  links:
+    anchors: warn
+    unrecognized_links: warn
+
+not_in_nav: |
+  ldap.md
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting_started/install.md
+    - Configuration: getting_started/configuration.md
+  - Quick Start Guide:
+    - Using LDAP Authentication: quick_start_guide/using_ldap_auth.md
+  - Guides:
+    - Login Eligibility: guides/login_eligibility.md
+    - User Management: guides/user_management.md
+    - Troubleshooting: guides/troubleshooting.md
+  - References:
+    - Configuration Reference: references/configuration.md
+    - Directory Diagnostics: references/diagnostics.md
+    - Testing: references/testing.md
