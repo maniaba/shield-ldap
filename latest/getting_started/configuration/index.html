@@ -89,6 +89,20 @@
     
       <div data-md-color-scheme="default" data-md-component="outdated" hidden>
         
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  
+  
+    You're viewing the development version.
+    Some features may not be available in a stable release yet.
+    <a href="../../../latest/"><strong>Go to the latest stable version.</strong></a>
+  
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
       </div>
     
     
@@ -1209,8 +1223,22 @@ to register the authenticator and connect it to your application's login form.</
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.action.edit", "content.code.copy", "navigation.footer", "navigation.instant", "navigation.top", "search.highlight", "search.share", "search.suggest"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
+  
       <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
+  
+    <script>
+      // Before the first stable release, /latest/ serves a copy of /dev/.
+      const guidePath = new URL("../..", window.location.href).pathname;
+      if (/\/dev\/?$/.test(guidePath)) {
+        document$.subscribe(() => {
+          const notice = document.querySelector('[data-md-component="outdated"]');
+          if (notice) notice.hidden = false;
+        });
+      }
+    </script>
+  
+
   </body>
 </html>
