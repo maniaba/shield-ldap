@@ -260,11 +260,11 @@ final class LDAPLoginTest extends DatabaseTestCase
         $this->ldap->localAccounts['missing-operator'] = $this->user->id + 1000;
         $this->directory->expects($this->never())->method('authenticate');
 
-        $auth      = config('Auth');
-        $passwords = $this->createMock(Passwords::class);
-        if (isset(get_object_vars($auth)['dummyPasswordHash'])) {
-            $auth->dummyPasswordHash = 'configured-dummy-hash';
-            $passwords->expects($this->once())->method('verify')->with('local-password', 'configured-dummy-hash')->willReturn(true);
+        $authOptions = get_object_vars(config('Auth'));
+        $dummyHash   = $authOptions['dummyPasswordHash'] ?? null;
+        $passwords   = $this->createMock(Passwords::class);
+        if ($dummyHash !== null) {
+            $passwords->expects($this->once())->method('verify')->with('local-password', $dummyHash)->willReturn(true);
             $passwords->expects($this->never())->method('hash');
         } else {
             $passwords->expects($this->once())->method('hash')->with('')->willReturn('discarded-hash');
