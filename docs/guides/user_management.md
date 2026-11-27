@@ -118,10 +118,10 @@ to eligible users during LDAP password sign-in. The mapping applies to both
 provisioned users and existing linked users, including when `updateProfile`
 is disabled.
 
-To refresh these groups between sign-ins, see
-[Synchronize Only Groups](../commands/index.md#synchronize-only-groups).
+To refresh groups and profiles independently of sign-in, see
+[Move Sign-In Updates to Scheduled Commands](../commands/index.md#move-sign-in-updates-to-scheduled-commands).
 
-On the next successful LDAP password sign-in, the connection withdraws grants
+When group synchronization runs, the connection withdraws grants
 for groups the user has left or whose mappings were removed. If several
 connections have granted the same group, the assignment remains until each
 of those connections withdraws its grant on a subsequent sign-in.

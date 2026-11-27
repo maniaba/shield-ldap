@@ -58,6 +58,8 @@ final readonly class LDAPConnection
         public bool $updateProfile = true,
         public bool $verifyCertificate = true,
         public ?array $groupMappings = null,
+        public bool $syncGroupsOnLogin = true,
+        public bool $syncProfileOnLogin = true,
     ) {
         $mappings = $groupMappings ?? [];
 

@@ -51,6 +51,7 @@ final class LDAPGroupSyncCommandTest extends DatabaseTestCase
             'profileAttributes' => ['username' => 'uid'],
             'provisionUsers'    => true,
             'groupMappings'     => ['developer' => 'cn=developers,dc=example,dc=test'],
+            'syncGroupsOnLogin' => false,
         ]];
         Factories::injectMock('config', 'AuthLDAP', $config);
         $this->directory = $this->createMock(LDAPGroupEnumerationInterface::class);

@@ -96,7 +96,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
 
             $verified = $this->readEligibleEntry($ldap, $connection, $entry, $eligibility, $attributes);
 
-            if (($connection->groupMappings ?? []) !== []) {
+            if ($connection->syncGroupsOnLogin && ($connection->groupMappings ?? []) !== []) {
                 $verified['matchedGroups'] = $this->findMappedGroups($ldap, $connection, $verified['dn']);
             }
 

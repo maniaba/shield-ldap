@@ -193,7 +193,8 @@ class LDAP extends Session
             throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
-        $configuredGroups = array_keys($connection->groupMappings ?? []);
+        $groupMappings    = $connection->syncGroupsOnLogin ? $connection->groupMappings : null;
+        $configuredGroups = array_keys($groupMappings ?? []);
 
         if ($configuredGroups !== [] && array_diff($configuredGroups, array_keys(setting('AuthGroups.groups'))) !== []) {
             throw new LDAPException(LDAPReason::InvalidConfiguration);
@@ -212,17 +213,19 @@ class LDAP extends Session
             throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
-        $filter = LDAPFilter::all($connection->loginFilter, LDAPFilter::any(...$predicates));
-        $entry  = $directory->authenticate(
+        $includeProfile = $connection->syncProfileOnLogin || $connection->provisionUsers;
+        $attributes     = $includeProfile ? array_values($connection->profileAttributes) : [];
+        $filter         = LDAPFilter::all($connection->loginFilter, LDAPFilter::any(...$predicates));
+        $entry          = $directory->authenticate(
             $connection,
             $baseDn,
             $filter,
-            array_values(array_unique([$connection->externalIdAttribute, ...array_values($connection->profileAttributes)])),
+            array_values(array_unique([$connection->externalIdAttribute, ...$attributes])),
             $password,
             $connection->eligibilityFilter,
         );
 
-        $matchedGroups = $connection->groupMappings === [] ? [] : null;
+        $matchedGroups = $groupMappings === [] ? [] : null;
 
         if ($configuredGroups !== []) {
             $matchedGroups = $entry['matchedGroups'] ?? throw new LDAPException(LDAPReason::InvalidConfiguration);
@@ -232,14 +235,17 @@ class LDAP extends Session
             }
         }
 
+        $readProfile = static fn (): array => LDAPUserResolver::profile($connection, $entry['attributes']);
+
         return $this->resolver->resolve(
             $connection->id,
             LDAPUserResolver::externalId($connection, $entry['attributes']),
-            LDAPUserResolver::profile($connection, $entry['attributes']),
+            $connection->syncProfileOnLogin ? $readProfile() : [],
             $connection->provisionUsers,
-            $connection->updateProfile,
+            $connection->syncProfileOnLogin && $connection->updateProfile,
             $this->localAccounts,
             $matchedGroups,
+            ! $connection->syncProfileOnLogin && $connection->provisionUsers ? $readProfile : null,
         );
     }
 

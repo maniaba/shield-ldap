@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Maniaba\ShieldLDAP\Authentication\LDAP;
 
+use Closure;
 use CodeIgniter\Shield\Entities\User;
 use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Shield\Models\UserModel;
@@ -38,9 +39,10 @@ final readonly class LDAPProfileSynchronizer
     /**
      * Resolve the identity after directory credentials and access have been verified.
      *
-     * @param array<string, string|null>   $profile
-     * @param array<array-key, int|string> $localAccounts
-     * @param list<string>|null            $groups        Verified Shield group keys
+     * @param array<string, string|null>              $profile
+     * @param array<array-key, int|string>            $localAccounts
+     * @param list<string>|null                       $groups              Verified Shield group keys
+     * @param (Closure(): array<string, string>)|null $provisioningProfile
      */
     public function resolve(
         string $connectionId,
@@ -50,12 +52,13 @@ final readonly class LDAPProfileSynchronizer
         bool $updateProfile = true,
         array $localAccounts = [],
         ?array $groups = null,
+        ?Closure $provisioningProfile = null,
     ): User {
         $key     = LDAPIdentityPersistence::key($connectionId, $externalId);
         $profile = $this->validateProfile($profile);
 
-        return $this->identities->transaction(function () use ($connectionId, $key, $profile, $provision, $updateProfile, $localAccounts, $groups): User {
-            $change = $this->prepareChange($key, $profile, $provision, $updateProfile, $localAccounts);
+        return $this->identities->transaction(function () use ($connectionId, $key, $profile, $provision, $updateProfile, $localAccounts, $groups, $provisioningProfile): User {
+            $change = $this->prepareChange($key, $profile, $provision, $updateProfile, $localAccounts, $provisioningProfile);
 
             if (isset($change['loginFailure'])) {
                 throw new LDAPException($change['loginFailure']);
@@ -128,8 +131,9 @@ final readonly class LDAPProfileSynchronizer
     }
 
     /**
-     * @param array<string, string|null>   $profile
-     * @param array<array-key, int|string> $localAccounts
+     * @param array<string, string|null>              $profile
+     * @param array<array-key, int|string>            $localAccounts
+     * @param (Closure(): array<string, string>)|null $provisioningProfile
      *
      * @return array{status: SyncStatus, user: User|null, fields: array<string, string|null>, loginFailure?: LDAPReason}
      */
@@ -139,9 +143,15 @@ final readonly class LDAPProfileSynchronizer
         bool $provision,
         bool $updateProfile,
         array $localAccounts,
+        ?Closure $provisioningProfile = null,
     ): array {
         $identity = $this->identities->findIdentity($key);
         $user     = $identity === null ? null : $this->identities->findUser($identity->user_id);
+
+        if ($user === null && $provision && $provisioningProfile !== null) {
+            $profile = $this->validateProfile($provisioningProfile());
+        }
+
         $username = $profile['username'] ?? null;
 
         if (LDAPIdentityPersistence::isReservedAccount($user, $username, $localAccounts)) {
