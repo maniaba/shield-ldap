@@ -63,3 +63,24 @@ Each stable guide has its own URL, such as `/1.2.3/`, and appears in the version
 selector. The guide opens on the latest stable release, or on development
 documentation until the first stable release. Run the workflow on `main` to
 refresh the site after a publishing failure.
+
+## Shield Compatibility Updates
+
+The [Shield Compatibility Updates workflow](.github/workflows/shield-compatibility-updates.yml)
+checks Packagist daily for stable Shield releases within the range declared in
+**composer.json**. It proposes one release at a time in a pull request. The
+compatibility workflow tests it on PHP 8.2 alongside the versions already
+listed in **.github/shield-versions.json**.
+
+To enable pull request creation, add the Actions repository secret
+`SHIELD_COMPATIBILITY_TOKEN`. Use a fine-grained personal access token limited
+to this repository with **Contents** and **Pull requests** read and write
+permissions. A repository-scoped token lets the automated PR trigger the same
+checks as a contributor's PR. [GitHub workflow triggers](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
+
+Run the workflow manually from `main` to check immediately. To list pending
+versions locally, run the detection step in dry-run mode.
+
+```console
+bash .github/scripts/update-shield-compatibility.sh --dry-run
+```

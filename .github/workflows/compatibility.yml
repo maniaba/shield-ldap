@@ -9,13 +9,28 @@ permissions:
   contents: read
 
 jobs:
+  versions:
+    runs-on: ubuntu-latest
+    outputs:
+      shield: ${{ steps.matrix.outputs.shield }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: matrix
+        run: |
+          versions=$(jq -ce . .github/shield-versions.json)
+          printf 'shield=%s\n' "$versions" >> "$GITHUB_OUTPUT"
+
   compatibility:
+    needs: versions
     name: Shield ${{ matrix.shield }} / PHP 8.2
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shield: ['1.4.1', '1.5.0']
+        shield: ${{ fromJSON(needs.versions.outputs.shield) }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

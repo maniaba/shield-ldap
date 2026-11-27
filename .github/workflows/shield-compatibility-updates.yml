@@ -1,0 +1,45 @@
+name: Shield Compatibility Updates
+
+on:
+  schedule:
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/scripts/update-shield-compatibility.sh'
+      - '.github/shield-versions.json'
+      - '.github/workflows/compatibility.yml'
+      - '.github/workflows/shield-compatibility-updates.yml'
+      - 'composer.json'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: shield-compatibility-updates-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name != 'pull_request' && 'main' || github.ref }}
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+          coverage: none
+
+      - name: Check for supported Shield releases
+        if: github.event_name == 'pull_request'
+        run: bash .github/scripts/update-shield-compatibility.sh --dry-run
+
+      - name: Open a compatibility pull request
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.SHIELD_COMPATIBILITY_TOKEN }}
+        run: bash .github/scripts/update-shield-compatibility.sh
