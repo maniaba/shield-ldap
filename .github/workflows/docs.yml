@@ -72,6 +72,7 @@ jobs:
       pages: write
       id-token: write
     environment:
+      # See the deployment branch rule in CONTRIBUTING.md.
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
