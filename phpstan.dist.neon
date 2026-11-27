@@ -1,0 +1,35 @@
+includes:
+  - phar://vendor/phpstan/phpstan/phpstan.phar/conf/bleedingEdge.neon
+
+parameters:
+  tmpDir: build/phpstan
+  level: 5
+  paths:
+    - src/
+    - tests/
+  bootstrapFiles:
+    - vendor/codeigniter4/framework/system/Test/bootstrap.php
+  universalObjectCratesClasses:
+    - Faker\Generator
+  scanDirectories:
+    - vendor/codeigniter4/framework/system/Helpers
+    - vendor/codeigniter4/settings/src/Helpers
+    - vendor/codeigniter4/shield/src/Helpers
+  dynamicConstantNames:
+    - CodeIgniter\CodeIgniter::CI_VERSION
+  codeigniter:
+    additionalConfigNamespaces:
+      - CodeIgniter\Settings\Config
+      - CodeIgniter\Shield\Config
+      - Maniaba\ShieldLDAP\Config
+    additionalServices:
+      - CodeIgniter\Shield\Config\Services
+      - Maniaba\ShieldLDAP\Config\Services
+  ignoreErrors:
+    -
+        message: '~^Call to internal static method CodeIgniter\\Config\\Factories::injectMock\(\)~'
+        identifier: staticMethod.internal
+        path: tests/*
+    -
+        message: '#Dynamic call to static method PHPUnit\\#'
+        identifier: staticMethod.dynamicCall
