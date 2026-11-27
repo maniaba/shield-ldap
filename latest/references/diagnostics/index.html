@@ -1158,8 +1158,9 @@ if it cannot verify a single eligible user. Discard the password after the
 operation and show the operator only the information needed for diagnosis.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p><code>auth('ldap')-&gt;check()</code> resolves a Shield user and may provision or update
-that user. For application sign-in, use <code>auth('ldap')-&gt;attempt()</code> and
+<p><code>auth('ldap')-&gt;check()</code> resolves a Shield user and may provision the user,
+update their profile, or reconcile mapped groups. For application sign-in, use
+<code>auth('ldap')-&gt;attempt()</code> and
 complete the configured Shield login actions. See the
 <a href="../../quick_start_guide/using_ldap_auth/">LDAP login quick start</a>.</p>
 </div>
@@ -1191,6 +1192,9 @@ per call.</p>
 a trusted encrypted connection, require one matching user, and recheck the
 same immutable identity against the eligibility filter. Return the entry DN
 and the requested attribute values using lowercase keys and lists of strings.
+For a connection with <code>groupMappings</code>, return a <code>matchedGroups</code> list of the
+Shield group keys whose LDAP membership you verified for that same user.
+Return an empty list when no configured group matches.
 Throw <code>LDAPException</code> with a reason code instead of passing native exceptions
 or credentials to the application.</p>
 <p>For <code>shield:ldap-link</code>, provide

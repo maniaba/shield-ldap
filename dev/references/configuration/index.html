@@ -1095,6 +1095,11 @@ for complete Active Directory and OpenLDAP examples.</p>
 <td><code>[]</code></td>
 <td>Maps reserved login identifiers to Shield user IDs for <a href="../../guides/user_management/#local-ldap-and-hybrid-login">hybrid login</a>. Identifiers are matched case-insensitively.</td>
 </tr>
+<tr>
+<td><code>$tables</code></td>
+<td><code>['ldap_group_grants' =&gt; 'shield_ldap_group_grants']</code></td>
+<td>Fallback name for the LDAP grant tracking table. The same key in <code>Config\Auth::$tables</code> takes precedence.</td>
+</tr>
 </tbody>
 </table>
 <p>The default config builds and validates a connection when <code>getConnection()</code>
@@ -1178,6 +1183,11 @@ is called. Use <code>connectionIds()</code> to list configured IDs.</p>
 <td><code>profileAttributes</code></td>
 <td><code>[]</code></td>
 <td>Map of writable Shield user fields to single-valued directory attributes. Map <code>username</code> when provisioning users.</td>
+</tr>
+<tr>
+<td><code>groupMappings</code></td>
+<td><code>null</code></td>
+<td>Map from existing Shield group keys to full LDAP group DNs on this connection. An empty array withdraws this connection's previous grants at the user's next LDAP sign-in. <code>null</code> disables group management. See <a href="../../getting_started/configuration/#map-ldap-groups-to-shield-groups">Map LDAP Groups to Shield Groups</a>.</td>
 </tr>
 <tr>
 <td><code>provisionUsers</code></td>

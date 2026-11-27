@@ -510,6 +510,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#map-ldap-groups-to-shield-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Map LDAP Groups to Shield Groups
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#environment-overrides" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1075,6 +1086,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#map-ldap-groups-to-shield-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Map LDAP Groups to Shield Groups
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#environment-overrides" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1267,6 +1289,40 @@ it to <code>null</code>, user searches use the root DN in <code>baseDn</code>. T
 needs permission to search each selected base. The native transport checks for
 a single match across the selected bases before it verifies the password. See the
 <a href="../../references/configuration/#login-and-eligibility-filters">configuration reference</a>.</p>
+<h2 id="map-ldap-groups-to-shield-groups">Map LDAP Groups to Shield Groups</h2>
+<p>Run the migrations after installing Shield to create the table that records
+LDAP group assignments. To use a custom table name, add the following entry to
+the existing <code>$tables</code> array in <strong>app/Config/Auth.php</strong> before running the
+migration.</p>
+<div class="highlight"><pre><span></span><code><span class="x">'ldap_group_grants' =&gt; 'auth_ldap_group_grants',</span>
+</code></pre></div>
+<p>If Shield's config omits this key, Shield LDAP reads it from <code>$tables</code> in
+<strong>app/Config/AuthLDAP.php</strong>. The default is <code>shield_ldap_group_grants</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="go">php spark migrate --all</span>
+</code></pre></div>
+<p>If the grants table already exists, rename it in the database when updating
+this setting so its recorded assignments carry over.</p>
+<p>Set <code>groupMappings</code> on each connection that should manage Shield groups. Use a
+key from <code>Config\AuthGroups::$groups</code> on the left and the full DN of an LDAP
+group entry on the right.</p>
+<div class="highlight"><pre><span></span><code><span class="x">'groupMappings' =&gt; [</span>
+<span class="x">    'user'      =&gt; 'CN=Users Group,OU=Groups,DC=example,DC=com',</span>
+<span class="x">    'developer' =&gt; 'CN=Developers,OU=Groups,DC=example,DC=com',</span>
+<span class="x">],</span>
+</code></pre></div>
+<p>For OpenLDAP, a group DN might be <code>cn=shield-users,ou=groups,dc=example,dc=org</code>.
+An organizational unit such as <code>OU=Users,DC=example,DC=com</code> is a container. Use
+the DN of the group entry that lists its members.</p>
+<p>The service account needs permission to search each mapped group by its
+membership attribute. The native directory checks direct <code>member</code> membership
+for Active Directory <code>group</code> and OpenLDAP <code>groupOfNames</code> entries, and direct
+<code>uniqueMember</code> membership for <code>groupOfUniqueNames</code>. Active Directory primary
+groups and membership inherited through nested groups are outside this lookup.
+See <a href="../../guides/user_management/#authorization">Group assignments</a> for how
+assignments are stored.</p>
+<p>Set <code>groupMappings</code> to an empty array to revoke this connection's previous
+grants on each user's next LDAP sign-in. Omitting the option or setting it to
+<code>null</code> disables group management for that connection.</p>
 <h2 id="environment-overrides">Environment Overrides</h2>
 <p>Keep <strong>.env</strong> outside version control. When a deployment environment requires
 underscores in variable names, use keys such as

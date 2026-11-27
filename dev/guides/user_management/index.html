@@ -1210,9 +1210,21 @@ Rejected directory credentials and outages both deny a new LDAP login.</p>
 <p>Revoke pre-migration remember-me tokens for reserved local accounts before
 enabling remembered sign-ins.</p>
 <h2 id="authorization">Authorization</h2>
-<p>Directory group filters control who may sign in. Manage groups and
-permissions with <a href="https://github.com/codeigniter4/shield/blob/develop/docs/references/authorization.md">Shield authorization</a>,
-including assignment of any groups your application requires for new users.</p>
+<p>Directory group filters control who may sign in. Configure connection-level
+<a href="../../getting_started/configuration/#map-ldap-groups-to-shield-groups"><code>groupMappings</code></a>
+to grant existing <a href="https://shield.codeigniter.com/latest/references/authorization/">Shield groups</a>
+to eligible users during LDAP password sign-in. The mapping applies to both
+provisioned users and existing linked users, including when <code>updateProfile</code>
+is disabled.</p>
+<p>On the next successful LDAP password sign-in, the connection withdraws grants
+for groups the user has left or whose mappings were removed. If several
+connections have granted the same group, the assignment remains until each
+of those connections withdraws its grant on a subsequent sign-in.</p>
+<p>Shield LDAP records only the group rows it creates. Existing manual
+assignments and Shield's default group stay under Shield's control, including
+manual assignments that overlap a mapping. To take manual ownership of a group
+already granted by LDAP, remove and re-add it in Shield. Shield's <code>addGroup()</code>
+method leaves an existing assignment as it is.</p>
 <h2 id="account-disabling-and-password-recovery">Account Disabling and Password Recovery</h2>
 <p>Directory eligibility is checked during password login. When disabling an
 account in the directory, use your application's established procedures to
