@@ -153,6 +153,98 @@ final class LDAPLoginTest extends DatabaseTestCase
         $this->assertSame('fallback_ldap_group_grants', $this->ldap->getGroupGrantsTable());
     }
 
+    #[DataProvider('provideSignsInWithoutSynchronizingGroupsOrProfiles')]
+    public function testSignsInWithoutSynchronizingGroupsOrProfiles(bool $provisionUsers): void
+    {
+        $this->ldap->connections['example'] = [
+            'groupMappings'      => ['developer' => 'cn=developers,dc=example,dc=com'],
+            'provisionUsers'     => $provisionUsers,
+            'syncGroupsOnLogin'  => false,
+            'syncProfileOnLogin' => false,
+        ] + $this->ldap->connections['example'];
+        $resolver = new LDAPUserResolver(model(UserModel::class));
+        $resolver->link('example', 'stable-id', $this->user->id);
+        $resolver->resolve('example', 'stable-id', groups: ['developer']);
+
+        $entry                      = $this->entry();
+        $entry['attributes']['uid'] = ['directory-user', 'another-name'];
+        $this->directory->expects($this->once())->method('authenticate')->with(
+            $this->isInstanceOf(LDAPConnection::class),
+            'dc=example,dc=com',
+            $this->anything(),
+            $provisionUsers ? ['entryUUID', 'uid'] : ['entryUUID'],
+        )->willReturn($entry);
+
+        $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
+
+        $response->assertSessionMissing('error');
+        $this->assertSame('local-user', auth('session')->user()?->username);
+        $this->seeInDatabase($this->tables['groups_users'], ['user_id' => $this->user->id, 'group' => 'developer']);
+    }
+
+    /**
+     * @return iterable<string, array{bool}>
+     */
+    public static function provideSignsInWithoutSynchronizingGroupsOrProfiles(): iterable
+    {
+        yield 'provisioning disabled' => [false];
+
+        yield 'provisioning enabled' => [true];
+    }
+
+    public function testProvisionsNewUserWithLoginSynchronizationDisabled(): void
+    {
+        $this->ldap->connections['example'] = [
+            'groupMappings'      => ['developer' => 'cn=developers,dc=example,dc=com'],
+            'syncGroupsOnLogin'  => false,
+            'syncProfileOnLogin' => false,
+        ] + $this->ldap->connections['example'];
+        $this->directory->expects($this->once())->method('authenticate')->willReturn(
+            $this->entry() + ['matchedGroups' => ['developer']],
+        );
+
+        $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
+
+        $response->assertSessionMissing('error');
+        $user = auth('session')->user();
+        $this->assertInstanceOf(User::class, $user);
+        $this->assertSame('directory-user', $user->username);
+        $this->assertTrue($user->inGroup('user'));
+        $this->assertFalse($user->inGroup('developer'));
+    }
+
+    #[DataProvider('provideControlsGroupAndProfileSynchronizationIndependently')]
+    public function testControlsGroupAndProfileSynchronizationIndependently(bool $syncGroups, bool $syncProfile): void
+    {
+        $this->ldap->connections['example'] = [
+            'groupMappings'      => ['developer' => 'cn=developers,dc=example,dc=com'],
+            'syncGroupsOnLogin'  => $syncGroups,
+            'syncProfileOnLogin' => $syncProfile,
+        ] + $this->ldap->connections['example'];
+        (new LDAPUserResolver(model(UserModel::class)))->link('example', 'stable-id', $this->user->id);
+        $this->directory->expects($this->once())->method('authenticate')->willReturn(
+            $this->entry() + ['matchedGroups' => ['developer']],
+        );
+
+        $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
+
+        $response->assertSessionMissing('error');
+        $user = auth('session')->user();
+        $this->assertInstanceOf(User::class, $user);
+        $this->assertSame($syncProfile ? 'directory-user' : 'local-user', $user->username);
+        $this->assertSame($syncGroups, $user->inGroup('developer'));
+    }
+
+    /**
+     * @return iterable<string, array{bool, bool}>
+     */
+    public static function provideControlsGroupAndProfileSynchronizationIndependently(): iterable
+    {
+        yield 'only profiles' => [false, true];
+
+        yield 'only groups' => [true, false];
+    }
+
     public function testDirectoryChecksRevokeOnlyLdapOwnedGroupsForALinkedUser(): void
     {
         $this->user->addGroup('beta', 'developer');

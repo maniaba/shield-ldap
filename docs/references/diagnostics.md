@@ -148,8 +148,9 @@ An implementation used for sign-in must verify the submitted password over
 a trusted encrypted connection, require one matching user, and recheck the
 same immutable identity against the eligibility filter. Return the entry DN
 and the requested attribute values using lowercase keys and lists of strings.
-For a connection with `groupMappings`, return a `matchedGroups` list of the
-Shield group keys whose LDAP membership you verified for that same user.
+For a connection with `syncGroupsOnLogin` enabled and a populated
+`groupMappings` array, return a `matchedGroups` list of the Shield group keys
+whose LDAP membership you verified for that same user.
 Return an empty list when no configured group matches.
 Throw `LDAPException` with a reason code instead of passing native exceptions
 or credentials to the application.

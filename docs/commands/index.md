@@ -178,6 +178,42 @@ the application and PHP paths.
 Use one scheduler per connection. When a run can take longer than the
 interval, use a lock such as `flock` on systems that provide it.
 
+## Move Sign-In Updates to Scheduled Commands
+
+Set these options for the LDAP connection in **app/Config/AuthLDAP.php** to
+apply group and existing-user profile updates through Spark only.
+
+```php
+'syncGroupsOnLogin'  => false,
+'syncProfileOnLogin' => false,
+'updateProfile'      => true,
+```
+
+Each sign-in still verifies credentials and LDAP eligibility. An application
+that enables sign-in provisioning continues to use mapped fields to create
+new Shield accounts. Mapped group changes take effect on the next successful
+group-only run. Keep `profileAttributes` and `groupMappings` configured for
+their respective commands.
+
+For CodeIgniter Tasks, add the two tasks to `init()` and configure the
+[Tasks runner](#run-every-five-minutes-with-codeigniter-tasks).
+
+```php
+$schedule->command('shield:ldap-sync corporate --apply')
+    ->everyFiveMinutes()
+    ->singleInstance();
+$schedule->command('shield:ldap-sync corporate --groups-only --apply')
+    ->everyFiveMinutes()
+    ->singleInstance();
+```
+
+For standard cron, run the profile command first. This lets group
+synchronization find users provisioned by the same run.
+
+```cron
+*/5 * * * * cd /srv/myapp && { /usr/bin/php spark shield:ldap-sync corporate --apply && /usr/bin/php spark shield:ldap-sync corporate --groups-only --apply; } >> writable/logs/ldap-sync.log 2>&1
+```
+
 ## Command Help
 
 Get the supported arguments and options in the terminal.

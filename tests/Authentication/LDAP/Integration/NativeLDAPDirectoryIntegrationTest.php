@@ -121,11 +121,19 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
         }
     }
 
-    public function testScansMappedGroupMembershipsAcrossMultiplePages(): void
+    public function testScansMappedGroupMembershipsWhenLoginGroupSyncIsDisabled(): void
     {
-        $connection = $this->connection(groupMappings: ['user' => 'cn=shield-users,' . self::GROUP_BASE_DN]);
-        $entries    = iterator_to_array((new NativeLDAPDirectory())->scanGroupMemberships($connection, 1));
-        $groups     = array_column($entries, 'matchedGroups', 'dn');
+        $connection = $this->connection(
+            groupMappings: ['user' => 'cn=shield-users,' . self::GROUP_BASE_DN],
+            syncGroupsOnLogin: false,
+        );
+        $directory = new NativeLDAPDirectory();
+        $login     = $directory->authenticate($connection, self::USER_BASE_DN, '(uid=alice)', ['uid'], 'alicePassword!');
+        $this->assertSame(['alice'], $login['attributes']['uid']);
+        $this->assertArrayNotHasKey('matchedGroups', $login);
+
+        $entries = iterator_to_array($directory->scanGroupMemberships($connection, 1));
+        $groups  = array_column($entries, 'matchedGroups', 'dn');
 
         $this->assertSame(['user'], $groups['uid=alice,' . self::USER_BASE_DN]);
         $this->assertSame([], $groups['uid=bob,' . self::USER_BASE_DN]);
@@ -326,6 +334,7 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
         array $hosts = ['127.0.0.1'],
         bool $verifyCertificate = true,
         array $groupMappings = [],
+        bool $syncGroupsOnLogin = true,
     ): LDAPConnection {
         $port = getenv($encryption === 'ldaps' ? 'SHIELD_LDAP_TEST_LDAPS_PORT' : 'SHIELD_LDAP_TEST_PORT');
 
@@ -343,6 +352,7 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
             (int) $port,
             verifyCertificate: $verifyCertificate,
             groupMappings: $groupMappings,
+            syncGroupsOnLogin: $syncGroupsOnLogin,
         );
     }
 }

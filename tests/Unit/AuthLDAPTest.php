@@ -43,6 +43,8 @@ final class AuthLDAPTest extends TestCase
         'updateProfile'       => false,
         'verifyCertificate'   => true,
         'groupMappings'       => ['user' => 'cn=users,ou=groups,dc=example,dc=test'],
+        'syncGroupsOnLogin'   => true,
+        'syncProfileOnLogin'  => true,
     ];
 
     public function testDefaultConfigurationHasNoConnections(): void
@@ -114,11 +116,13 @@ final class AuthLDAPTest extends TestCase
     public function testLoadsNestedEnvironmentOverrides(string $separator): void
     {
         $overrides = [
-            'authldap.connections.corporate.bindPassword'      => 'environment-test-password',
-            'authldap.connections.corporate.hosts.0'           => 'ldap-env.example.test',
-            'authldap.connections.corporate.port'              => '1636',
-            'authldap.connections.corporate.provisionUsers'    => 'false',
-            'authldap.connections.corporate.verifyCertificate' => 'false',
+            'authldap.connections.corporate.bindPassword'       => 'environment-test-password',
+            'authldap.connections.corporate.hosts.0'            => 'ldap-env.example.test',
+            'authldap.connections.corporate.port'               => '1636',
+            'authldap.connections.corporate.provisionUsers'     => 'false',
+            'authldap.connections.corporate.verifyCertificate'  => 'false',
+            'authldap.connections.corporate.syncGroupsOnLogin'  => 'false',
+            'authldap.connections.corporate.syncProfileOnLogin' => 'false',
         ];
 
         $original = [];
@@ -143,6 +147,8 @@ final class AuthLDAPTest extends TestCase
             $this->assertSame(1636, $connection->port);
             $this->assertFalse($connection->provisionUsers);
             $this->assertFalse($connection->verifyCertificate);
+            $this->assertFalse($connection->syncGroupsOnLogin);
+            $this->assertFalse($connection->syncProfileOnLogin);
         } finally {
             foreach ($original as $key => $value) {
                 putenv($value === false ? $key : $key . '=' . $value);

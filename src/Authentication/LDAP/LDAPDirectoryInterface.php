@@ -36,7 +36,7 @@ interface LDAPDirectoryInterface
 
     /**
      * Search for one user, verify their password, and apply the eligibility filter.
-     * If groupMappings has entries, return the verified Shield group keys as
+     * If syncGroupsOnLogin is enabled and groupMappings has entries, return the verified Shield group keys as
      * matchedGroups, including an empty list when the user matches no groups.
      *
      * @param list<string> $attributes

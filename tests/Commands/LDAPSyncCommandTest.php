@@ -49,13 +49,14 @@ final class LDAPSyncCommandTest extends DatabaseTestCase
 
         $this->config              = new AuthLDAP();
         $this->config->connections = ['corporate' => [
-            'hosts'             => ['ldap.example.test'],
-            'baseDn'            => 'dc=example,dc=test',
-            'bindDn'            => 'cn=reader,dc=example,dc=test',
-            'bindPassword'      => 'test-bind-password',
-            'userBaseDn'        => ['ou=people,dc=example,dc=test', 'ou=contractors,dc=example,dc=test'],
-            'profileAttributes' => ['username' => 'uid'],
-            'provisionUsers'    => true,
+            'hosts'              => ['ldap.example.test'],
+            'baseDn'             => 'dc=example,dc=test',
+            'bindDn'             => 'cn=reader,dc=example,dc=test',
+            'bindPassword'       => 'test-bind-password',
+            'userBaseDn'         => ['ou=people,dc=example,dc=test', 'ou=contractors,dc=example,dc=test'],
+            'profileAttributes'  => ['username' => 'uid'],
+            'provisionUsers'     => true,
+            'syncProfileOnLogin' => false,
         ]];
         Factories::injectMock('config', 'AuthLDAP', $this->config);
 

@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Maniaba\ShieldLDAP\Authentication\LDAP;
 
+use Closure;
 use CodeIgniter\Shield\Entities\User;
 use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Shield\Models\UserModel;
@@ -44,9 +45,10 @@ final readonly class LDAPUserResolver
      * Profile keys must be explicitly mapped to writable UserModel columns.
      * LDAP contact addresses cannot modify the local email/password identity.
      *
-     * @param array<string, string|null>   $profile
-     * @param array<array-key, int|string> $localAccounts
-     * @param list<string>|null            $groups        Verified Shield group keys
+     * @param array<string, string|null>              $profile
+     * @param array<array-key, int|string>            $localAccounts
+     * @param list<string>|null                       $groups              Verified Shield group keys
+     * @param (Closure(): array<string, string>)|null $provisioningProfile Read mapped fields only for a new account
      */
     public function resolve(
         string $connectionId,
@@ -56,8 +58,9 @@ final readonly class LDAPUserResolver
         bool $updateProfile = true,
         array $localAccounts = [],
         ?array $groups = null,
+        ?Closure $provisioningProfile = null,
     ): User {
-        return $this->profiles->resolve($connectionId, $externalId, $profile, $provision, $updateProfile, $localAccounts, $groups);
+        return $this->profiles->resolve($connectionId, $externalId, $profile, $provision, $updateProfile, $localAccounts, $groups, $provisioningProfile);
     }
 
     /**
