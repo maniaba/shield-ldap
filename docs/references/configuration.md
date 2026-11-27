@@ -37,9 +37,9 @@ is called. Use `connectionIds()` to list configured IDs.
 | `externalIdAttribute` | `'entryUUID'` | Immutable, single-valued LDAP attribute used to link the Shield user. Use `objectGUID` for Active Directory. |
 | `profileAttributes` | `[]` | Map of writable Shield user fields to single-valued directory attributes. Map `username` when provisioning users. |
 | `groupMappings` | `[]` | Map from existing Shield group keys to full LDAP group DNs on this connection. See [Map LDAP Groups to Shield Groups](../getting_started/configuration.md#map-ldap-groups-to-shield-groups). |
-| `provisionUsers` | `false` | Creates a Shield user on successful LDAP sign-in when there is no existing link. |
-| `eligibilityFilter` | `'(objectClass=*)'` | Additional trusted filter evaluated on the matched entry after password verification. |
-| `updateProfile` | `true` | Updates mapped attributes on existing linked users during successful directory checks. When `false`, mappings still apply on provisioning. |
+| `provisionUsers` | `false` | Creates a Shield user during successful LDAP sign-in or [directory synchronization](../commands/index.md#synchronize-users) when there is no existing link. |
+| `eligibilityFilter` | `'(objectClass=*)'` | Additional trusted filter evaluated after password verification at sign-in and combined with `loginFilter` during synchronization. |
+| `updateProfile` | `true` | Updates mapped attributes on existing linked users during successful directory checks and synchronization. When `false`, mappings still apply on provisioning. |
 
 Keep endpoints in a connection within one logical directory and apply equivalent
 access policies on every endpoint. The native transport tries endpoints in the

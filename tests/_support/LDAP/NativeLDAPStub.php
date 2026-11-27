@@ -30,6 +30,21 @@ final class NativeLDAPStub
      */
     public static array $operations = [];
 
+    /**
+     * @var list<array{filter: string, attributes: list<string>}>
+     */
+    public static array $queries = [];
+
+    /**
+     * @var list<array{base: string, filter: string, attributes: list<string>, sizeLimit: int, controls: array}>
+     */
+    public static array $pagedRequests = [];
+
+    /**
+     * @var list<array{entries: list<string>, cookie?: int|string, code?: int, referrals?: list<string>}>
+     */
+    public static array $pages = [];
+
     public static int $unbound                    = 0;
     public static bool $certificateOptionSucceeds = true;
     public static int $tlsStarts                  = 0;

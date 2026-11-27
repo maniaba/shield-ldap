@@ -88,6 +88,39 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
         $this->assertSame([], $bob['matchedGroups']);
     }
 
+    public function testLooksUpAnEligibleDirectoryIdentityForLinking(): void
+    {
+        $connection = $this->connection();
+        $directory  = new NativeLDAPDirectory();
+        $baseDns    = [self::GROUP_BASE_DN, self::BASE_DN, self::USER_BASE_DN];
+
+        $entry = $directory->lookupUser($connection, $baseDns, '(uid=alice)', '(objectClass=person)');
+
+        $this->assertSame('uid=alice,' . self::USER_BASE_DN, $entry['dn']);
+        $this->assertSame(['entryuuid'], array_keys($entry['attributes']));
+        $this->assertMatchesRegularExpression('/\A[a-f0-9-]{36}\z/', $entry['attributes']['entryuuid'][0]);
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('ineligible_user');
+
+        $directory->lookupUser($connection, $baseDns, '(uid=alice)', '(uid=bob)');
+    }
+
+    public function testScansEligibleUsersAcrossMultiplePages(): void
+    {
+        $entries = iterator_to_array((new NativeLDAPDirectory())->scanUsers($this->connection(), 1));
+
+        $this->assertEqualsCanonicalizing([
+            'uid=alice,' . self::USER_BASE_DN,
+            'uid=bob,' . self::USER_BASE_DN,
+        ], array_column($entries, 'dn'));
+
+        foreach ($entries as $entry) {
+            $this->assertSame(['entryuuid'], array_keys($entry['attributes']));
+            $this->assertMatchesRegularExpression('/\A[a-f0-9-]{36}\z/', $entry['attributes']['entryuuid'][0]);
+        }
+    }
+
     public function testRejectsWrongCertificateHostname(): void
     {
         $host = getenv('SHIELD_LDAP_TEST_WRONG_HOST');

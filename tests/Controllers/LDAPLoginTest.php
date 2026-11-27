@@ -105,10 +105,11 @@ final class LDAPLoginTest extends DatabaseTestCase
 
     public function testDirectoryLoginGrantsMappedGroupsFromTheSelectedConnection(): void
     {
+        setting('AuthGroups.defaultGroup', 'beta');
         $mappings = [
-            'user'      => 'cn=users,ou=groups,dc=example,dc=com',
-            'developer' => 'cn=developers,ou=groups,dc=example,dc=com',
-            'beta'      => 'cn=beta,ou=groups,dc=example,dc=com',
+            'user'       => 'cn=users,ou=groups,dc=example,dc=com',
+            'developer'  => 'cn=developers,ou=groups,dc=example,dc=com',
+            'superadmin' => 'cn=senior-admins,ou=groups,dc=example,dc=com',
         ];
         $this->ldap->connections['example']['groupMappings'] = ['admin' => 'cn=admins,dc=example,dc=com'];
         $this->ldap->connections['research']                 = ['groupMappings' => $mappings] + $this->ldap->connections['example'];
@@ -129,8 +130,9 @@ final class LDAPLoginTest extends DatabaseTestCase
         $this->assertInstanceOf(User::class, $user);
         $this->assertTrue($user->inGroup('user'));
         $this->assertTrue($user->inGroup('developer'));
-        $this->assertFalse($user->inGroup('admin', 'beta'));
-        $this->seeNumRecords(2, $this->tables['groups_users'], ['user_id' => $user->id]);
+        $this->assertTrue($user->inGroup('beta'));
+        $this->assertFalse($user->inGroup('admin', 'superadmin'));
+        $this->seeNumRecords(3, $this->tables['groups_users'], ['user_id' => $user->id]);
     }
 
     public function testDirectoryChecksAddGroupsToALinkedUserWithoutRemovingOrDuplicatingMemberships(): void
@@ -401,6 +403,20 @@ final class LDAPLoginTest extends DatabaseTestCase
 
         $response->assertSessionHas('error', lang('Auth.badAttempt'));
         $this->assertFalse(auth('session')->loggedIn());
+    }
+
+    public function testReservedLocalAccountCannotUseAnExistingDirectoryLinkToSignIn(): void
+    {
+        $this->ldap->localAccounts[$this->user->username] = $this->user->id;
+        $resolver                                         = new LDAPUserResolver(auth()->getProvider());
+        $resolver->link('example', 'stable-id', $this->user->id);
+        $this->directory->expects($this->once())->method('authenticate')->willReturn($this->entry());
+
+        $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
+
+        $response->assertSessionHas('error', lang('Auth.badAttempt'));
+        $this->assertFalse(auth('session')->loggedIn());
+        $this->assertSame($this->user->username, $resolver->resolve('example', 'stable-id')->username);
     }
 
     public function testReservedUsernameWithNoMatchingLocalAccountFailsClosed(): void

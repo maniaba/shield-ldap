@@ -234,6 +234,209 @@ final class NativeLDAPTransportTest extends TestCase
         }
     }
 
+    public function testLookupConfirmsTheEligibleIdentityWithOneServiceBind(): void
+    {
+        $connection = $this->connection();
+        $externalId = "\0(*\\)";
+
+        NativeLDAPStub::$entriesByBase = [
+            self::BASE_DN         => [self::SECOND_ENTRY_DN],
+            self::SECOND_BASE_DN  => [self::SECOND_ENTRY_DN],
+            self::SECOND_ENTRY_DN => [self::SECOND_ENTRY_DN],
+        ];
+        NativeLDAPStub::$attributesByDn = [self::SECOND_ENTRY_DN => [
+            'entryuuid' => [$externalId],
+            'mail'      => ['alice@example.test'],
+        ]];
+
+        $entry = (new NativeLDAPDirectory())->lookupUser($connection, [self::BASE_DN, self::SECOND_BASE_DN], '(uid=alice)', '(objectClass=person)');
+
+        $this->assertSame(['dn' => self::SECOND_ENTRY_DN, 'attributes' => ['entryuuid' => [$externalId]]], $entry);
+        $this->assertSame([
+            ['bind', $connection->bindDn],
+            ['search', self::BASE_DN],
+            ['search', self::SECOND_BASE_DN],
+            ['read', self::SECOND_ENTRY_DN],
+        ], NativeLDAPStub::$operations);
+        $this->assertSame([
+            ['filter' => '(uid=alice)', 'attributes' => ['entryUUID']],
+            ['filter' => '(uid=alice)', 'attributes' => ['entryUUID']],
+            ['filter' => '(&(uid=alice)(objectClass=person)(entryUUID=\00\28\2a\5c\29))', 'attributes' => ['entryUUID']],
+        ], NativeLDAPStub::$queries);
+        $this->assertSame(1, NativeLDAPStub::$unbound);
+    }
+
+    public function testLookupRejectsAmbiguityBeforeApplyingEligibility(): void
+    {
+        $connection = $this->connection();
+
+        NativeLDAPStub::$entriesByBase = [
+            self::FIRST_BASE_DN  => [self::FIRST_ENTRY_DN],
+            self::SECOND_BASE_DN => [self::SECOND_ENTRY_DN],
+        ];
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('ambiguous_user');
+
+        try {
+            (new NativeLDAPDirectory())->lookupUser($connection, [self::FIRST_BASE_DN, self::SECOND_BASE_DN], '(uid=alice)', '(objectClass=person)');
+        } finally {
+            $this->assertSame([
+                ['bind', $connection->bindDn],
+                ['search', self::FIRST_BASE_DN],
+                ['search', self::SECOND_BASE_DN],
+            ], NativeLDAPStub::$operations);
+            $this->assertSame(['(uid=alice)', '(uid=alice)'], array_column(NativeLDAPStub::$queries, 'filter'));
+            $this->assertSame(1, NativeLDAPStub::$unbound);
+        }
+    }
+
+    public function testLookupRequiresCertificateVerificationBeforeOpeningAnEndpoint(): void
+    {
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('tls_verification_required');
+
+        try {
+            (new NativeLDAPDirectory())->lookupUser($this->connection(verifyCertificate: false), self::BASE_DN, '(uid=alice)');
+        } finally {
+            $this->assertSame([], NativeLDAPStub::$connected);
+        }
+    }
+
+    public function testScanUsesCriticalPagingAndResetsTheCookieForEachBase(): void
+    {
+        $connection = $this->scanConnection();
+        $cookie     = "\0continuation";
+
+        NativeLDAPStub::$pages = [
+            ['entries' => [self::FIRST_ENTRY_DN], 'cookie' => $cookie],
+            ['entries' => [self::SECOND_ENTRY_DN], 'cookie' => ''],
+            ['entries' => [self::SECOND_ENTRY_DN], 'cookie' => ''],
+        ];
+        NativeLDAPStub::$attributesByDn = [
+            self::FIRST_ENTRY_DN  => ['entryuuid' => ['first-id'], 'uid' => ['alice'], 'mail' => ['alice@example.test']],
+            self::SECOND_ENTRY_DN => ['entryuuid' => ['second-id'], 'uid' => ['other-alice']],
+        ];
+
+        $entries = iterator_to_array((new NativeLDAPDirectory())->scanUsers($connection, 1));
+
+        $this->assertSame([self::FIRST_ENTRY_DN, self::SECOND_ENTRY_DN, self::SECOND_ENTRY_DN], array_column($entries, 'dn'));
+        $this->assertSame(['entryuuid' => ['first-id'], 'uid' => ['alice']], $entries[0]['attributes']);
+        $this->assertSame([self::FIRST_ENDPOINT], NativeLDAPStub::$connected);
+        $this->assertSame([
+            ['bind', $connection->bindDn],
+            ['search', self::BASE_DN],
+            ['search', self::BASE_DN],
+            ['search', self::SECOND_BASE_DN],
+        ], NativeLDAPStub::$operations);
+        $requests = NativeLDAPStub::$pagedRequests;
+        $this->assertSame([0, 0, 0], array_column($requests, 'sizeLimit'));
+        $this->assertSame(array_fill(0, 3, '(&(objectClass=person)(accountStatus=active))'), array_column($requests, 'filter'));
+        $this->assertSame(array_fill(0, 3, ['entryUUID', 'uid']), array_column($requests, 'attributes'));
+        $this->assertSame(array_map(
+            static fn (string $value): array => [[
+                'oid'        => LDAP_CONTROL_PAGEDRESULTS,
+                'iscritical' => true,
+                'value'      => ['size' => 1, 'cookie' => $value],
+            ]],
+            ['', $cookie, ''],
+        ), array_column($requests, 'controls'));
+        $this->assertSame(1, NativeLDAPStub::$unbound);
+    }
+
+    public function testClosingAScanImmediatelyReleasesItsConnectionWithTheIteratorStillHeld(): void
+    {
+        NativeLDAPStub::$pages = [
+            ['entries' => [self::FIRST_ENTRY_DN], 'cookie' => 'first-page'],
+            ['entries' => [self::SECOND_ENTRY_DN], 'cookie' => ''],
+        ];
+
+        $scan     = (new NativeLDAPDirectory())->scanUsers($this->scanConnection(), 1);
+        $iterator = $scan->getIterator();
+        $this->assertSame([], NativeLDAPStub::$connected);
+
+        $iterator->rewind();
+        $this->assertSame(self::FIRST_ENTRY_DN, $iterator->current()['dn']);
+        $this->assertSame(0, NativeLDAPStub::$unbound);
+
+        $scan->close();
+        $this->assertSame(1, NativeLDAPStub::$unbound);
+
+        $scan->close();
+        $iterator->next();
+        $this->assertFalse($iterator->valid());
+        $this->assertSame([], iterator_to_array($scan));
+        $this->assertCount(1, NativeLDAPStub::$pagedRequests);
+        $this->assertSame(1, NativeLDAPStub::$unbound);
+    }
+
+    public function testScanReportsThePageLimitAndReleasesTheConnection(): void
+    {
+        NativeLDAPStub::$pages = array_fill(0, 10_000, ['entries' => [], 'cookie' => 'continuation']);
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('scan_limit_exceeded');
+
+        try {
+            iterator_to_array((new NativeLDAPDirectory())->scanUsers($this->scanConnection(), 1));
+        } finally {
+            $this->assertCount(10_000, NativeLDAPStub::$pagedRequests);
+            $this->assertSame(1, NativeLDAPStub::$unbound);
+        }
+    }
+
+    /**
+     * @param array{entries: list<string>, cookie?: int|string, code?: int, referrals?: list<string>} $page
+     */
+    #[DataProvider('provideRejectsIncompletePagedResults')]
+    public function testRejectsIncompletePagedResults(array $page): void
+    {
+        NativeLDAPStub::$pages = [$page];
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('incomplete_search');
+
+        try {
+            foreach ((new NativeLDAPDirectory())->scanUsers($this->scanConnection(), 1) as $entry) {
+                $this->fail('The incomplete page yielded entry ' . $entry['dn']);
+            }
+        } finally {
+            $this->assertSame(1, NativeLDAPStub::$unbound);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{array{entries: list<string>, cookie?: int|string, code?: int, referrals?: list<string>}}>
+     */
+    public static function provideRejectsIncompletePagedResults(): iterable
+    {
+        yield 'missing control' => [['entries' => [self::FIRST_ENTRY_DN]]];
+
+        yield 'malformed cookie' => [['entries' => [self::FIRST_ENTRY_DN], 'cookie' => 1]];
+
+        yield 'size limit with a full page' => [['entries' => [self::FIRST_ENTRY_DN], 'cookie' => '', 'code' => 4]];
+
+        yield 'response referrals with a success code' => [[
+            'entries'   => [self::FIRST_ENTRY_DN],
+            'cookie'    => '',
+            'referrals' => ['ldap://other.example.test'],
+        ]];
+
+        yield 'oversized page' => [['entries' => [self::FIRST_ENTRY_DN, self::SECOND_ENTRY_DN], 'cookie' => '']];
+    }
+
+    public function testScanRequiresVerifiedTlsBeforeOpeningAnEndpoint(): void
+    {
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('tls_verification_required');
+
+        try {
+            iterator_to_array((new NativeLDAPDirectory())->scanUsers($this->scanConnection(verifyCertificate: false)));
+        } finally {
+            $this->assertSame([], NativeLDAPStub::$connected);
+        }
+    }
+
     #[DataProvider('provideRetriesAlternativeEndpointOnTransportFailure')]
     public function testRetriesAlternativeEndpointOnTransportFailure(int $code): void
     {
@@ -361,7 +564,7 @@ final class NativeLDAPTransportTest extends TestCase
         }
     }
 
-    private function connection(): LDAPConnection
+    private function connection(bool $verifyCertificate = true): LDAPConnection
     {
         return new LDAPConnection(
             'test',
@@ -369,6 +572,22 @@ final class NativeLDAPTransportTest extends TestCase
             self::BASE_DN,
             'cn=reader,dc=example,dc=test',
             'readerPassword!',
+            verifyCertificate: $verifyCertificate,
+        );
+    }
+
+    private function scanConnection(bool $verifyCertificate = true): LDAPConnection
+    {
+        return new LDAPConnection(
+            'test',
+            ['first.example.test', 'second.example.test'],
+            self::BASE_DN,
+            'cn=reader,dc=example,dc=test',
+            'readerPassword!',
+            userBaseDn: [self::BASE_DN, self::SECOND_BASE_DN],
+            profileAttributes: ['username' => 'uid'],
+            eligibilityFilter: '(accountStatus=active)',
+            verifyCertificate: $verifyCertificate,
         );
     }
 }

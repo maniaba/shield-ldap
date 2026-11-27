@@ -26,6 +26,7 @@ use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;
 use Maniaba\ShieldLDAP\Authentication\LDAP\MultiBaseLDAPDirectoryInterface;
 use Maniaba\ShieldLDAP\Config\AuthLDAP;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
+use Maniaba\ShieldLDAP\Exceptions\LDAPReason;
 
 /**
  * Uses verified LDAP identities with Shield's session and login action lifecycle.
@@ -56,11 +57,11 @@ class LDAP extends Session
 
         $this->ldapConfig    = $config ?? config('AuthLDAP');
         $this->directory     = $directory ?? service('ldapDirectory');
-        $this->resolver      = $resolver ?? new LDAPUserResolver($provider);
+        $this->resolver      = $resolver ?? service('ldapUserResolver', $provider);
         $this->localAccounts = array_change_key_case($this->ldapConfig->localAccounts);
 
         if (count($this->localAccounts) !== count($this->ldapConfig->localAccounts)) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
     }
 
@@ -189,13 +190,13 @@ class LDAP extends Session
         $connection   = $this->ldapConfig->getConnection($connectionId);
 
         if ($connection->id !== $connectionId) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
         $configuredGroups = array_keys($connection->groupMappings);
 
         if ($configuredGroups !== [] && array_diff($configuredGroups, array_keys(setting('AuthGroups.groups'))) !== []) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
         $predicates = [];
@@ -208,7 +209,7 @@ class LDAP extends Session
         $directory = $this->directory;
 
         if (is_array($baseDn) && ! $directory instanceof MultiBaseLDAPDirectoryInterface) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
         $filter = LDAPFilter::all($connection->loginFilter, LDAPFilter::any(...$predicates));
@@ -224,40 +225,20 @@ class LDAP extends Session
         $matchedGroups = [];
 
         if ($configuredGroups !== []) {
-            $matchedGroups = $entry['matchedGroups'] ?? throw new LDAPException('invalid_configuration');
+            $matchedGroups = $entry['matchedGroups'] ?? throw new LDAPException(LDAPReason::InvalidConfiguration);
 
             if (array_diff($matchedGroups, $configuredGroups) !== []) {
-                throw new LDAPException('invalid_directory_entry');
-            }
-        }
-
-        $ids = $entry['attributes'][strtolower($connection->externalIdAttribute)] ?? [];
-
-        if (count($ids) !== 1 || $ids[0] === '') {
-            throw new LDAPException('invalid_identity');
-        }
-
-        $externalId = strcasecmp($connection->externalIdAttribute, 'objectGUID') === 0
-            ? LDAPUserResolver::normalizeObjectGuid($ids[0])
-            : $ids[0];
-        $profile = [];
-
-        foreach ($connection->profileAttributes as $field => $attribute) {
-            $values = $entry['attributes'][strtolower($attribute)] ?? [];
-
-            if (count($values) === 1) {
-                $profile[$field] = $values[0];
-            } elseif ($values !== []) {
-                throw new LDAPException('invalid_profile');
+                throw new LDAPException(LDAPReason::InvalidDirectoryEntry);
             }
         }
 
         return $this->resolver->resolve(
             $connection->id,
-            $externalId,
-            $profile,
+            LDAPUserResolver::externalId($connection, $entry['attributes']),
+            LDAPUserResolver::profile($connection, $entry['attributes']),
             $connection->provisionUsers,
             $connection->updateProfile,
+            $this->localAccounts,
             $matchedGroups,
         );
     }

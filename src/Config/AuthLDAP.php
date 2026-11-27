@@ -16,6 +16,7 @@ namespace Maniaba\ShieldLDAP\Config;
 use CodeIgniter\Config\BaseConfig;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPConnection;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
+use Maniaba\ShieldLDAP\Exceptions\LDAPReason;
 use Throwable;
 
 /**
@@ -81,7 +82,7 @@ class AuthLDAP extends BaseConfig
             || ! isset($settings['hosts'], $settings['baseDn'], $settings['bindDn'])
             || array_filter($settings, is_string(...), ARRAY_FILTER_USE_KEY) !== $settings
         ) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
         try {
@@ -95,7 +96,7 @@ class AuthLDAP extends BaseConfig
             );
         } catch (Throwable $exception) {
             // The constructor received the raw bind password as an argument.
-            throw new LDAPException($exception instanceof LDAPException ? $exception->reason : 'invalid_configuration');
+            throw new LDAPException($exception instanceof LDAPException ? $exception->reason : LDAPReason::InvalidConfiguration);
         }
     }
 

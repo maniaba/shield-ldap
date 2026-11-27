@@ -153,3 +153,22 @@ Shield group keys whose LDAP membership you verified for that same user.
 Return an empty list when no configured group matches.
 Throw `LDAPException` with a reason code instead of passing native exceptions
 or credentials to the application.
+
+For `shield:ldap-link`, provide
+`Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserLookupInterface`. The
+package's `ldapUserLookup()` service uses this capability on the configured
+directory. Applications can also override that service in
+**app/Config/Services.php**. [Link Existing Users](../commands/index.md#link-existing-users)
+
+To support `shield:ldap-sync`, implement
+`Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserEnumerationInterface`. Its
+`scanUsers(LDAPConnection $connection, int $pageSize = 100): iterable` method
+yields users matching `loginFilter` and `eligibilityFilter` from all effective
+user search bases. Use the service account over verified TLS. Yield entries
+with a `dn` and an `attributes` map of lowercase attribute names to lists of
+strings. Include the configured immutable ID and mapped profile attributes.
+Throw `LDAPException` if the scan is incomplete.
+The `ldapUserEnumeration()` service uses this capability on the configured
+directory and can be overridden separately. The native scan exposes
+`LDAPUserScan::close()` for consumers that stop before the end of iteration.
+[Synchronize Users](../commands/index.md#synchronize-users)

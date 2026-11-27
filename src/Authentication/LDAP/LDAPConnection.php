@@ -15,6 +15,7 @@ namespace Maniaba\ShieldLDAP\Authentication\LDAP;
 
 use Closure;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
+use Maniaba\ShieldLDAP\Exceptions\LDAPReason;
 
 /**
  * Immutable settings and a bind credential for an LDAP directory.
@@ -71,14 +72,14 @@ final readonly class LDAPConnection
             || array_filter($groupMappings, is_string(...)) !== $groupMappings
             || array_filter($groupMappings, is_string(...), ARRAY_FILTER_USE_KEY) !== $groupMappings
         ) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
         foreach ($hosts as $host) {
             if (filter_var($host, FILTER_VALIDATE_IP) === false
                 && filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false
             ) {
-                throw new LDAPException('invalid_endpoint');
+                throw new LDAPException(LDAPReason::InvalidEndpoint);
             }
         }
 
@@ -86,11 +87,11 @@ final readonly class LDAPConnection
             || ! self::isValidBaseDn($bindDn)
             || ($userBaseDn !== null && ! self::isValidBaseDn($userBaseDn))
         ) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
         if ($bindPassword === '' || str_contains($bindPassword, "\0")) {
-            throw new LDAPException('invalid_bind_secret');
+            throw new LDAPException(LDAPReason::InvalidBindSecret);
         }
 
         LDAPFilter::validate($loginFilter);
@@ -102,7 +103,7 @@ final readonly class LDAPConnection
 
         foreach ($groupMappings as $group => $dn) {
             if (trim($group) === '' || strtolower($group) !== $group || ! self::isValidBaseDn($dn)) {
-                throw new LDAPException('invalid_configuration');
+                throw new LDAPException(LDAPReason::InvalidConfiguration);
             }
         }
 

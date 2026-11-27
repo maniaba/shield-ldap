@@ -35,6 +35,11 @@ unmapped fields and Shield's password and email identities under
 application control. Store directory contact information in a dedicated
 profile field such as `directory_email`.
 
+LDAP provisioning assigns Shield's configured `AuthGroups.defaultGroup` to new
+users, as Shield's `shield:user create` does. Provisioning does not trigger the
+web `register` event. A successful LDAP sign-in still triggers Shield's
+standard login event.
+
 !!! note
 
     Shield may require a local activation step. When registration activation is
@@ -43,11 +48,23 @@ profile field such as `directory_email`.
     contact identity verified by your application or an action that supports
     directory-only users. [Shield authentication actions](https://github.com/codeigniter4/shield/blob/develop/docs/references/authentication/auth_actions.md)
 
+## Synchronizing Users from LDAP
+
+Use `shield:ldap-sync` from a trusted administrative shell to preview and apply
+provisioning and mapped profile updates in bulk.
+[Spark Commands](../commands/index.md#synchronize-users)
+
 ## Linking an Existing Shield User
 
-During migration, start with provisioning disabled. In a trusted operator
-workflow, verify the directory account and select the Shield user who owns
-it. Then create the link using the verified external identifier and
+During migration, start with provisioning disabled. You can keep LDAP web
+sign-in disabled while using `shield:ldap-link` to preview and link accounts by
+username from a trusted administrative shell.
+[Spark Commands](../commands/index.md#link-existing-users)
+
+### Linking from Application Code
+
+In an application workflow, verify the directory account and select the Shield
+user who owns it. Create the link using the verified external identifier and
 selected Shield user ID.
 
 ```php
