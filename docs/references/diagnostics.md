@@ -158,4 +158,4 @@ user search bases. Use the service account over verified TLS. Yield entries
 with a `dn` and an `attributes` map of lowercase attribute names to lists of
 strings. Include the configured immutable ID and mapped profile attributes.
 Throw `LDAPException` if the scan is incomplete.
-[Synchronizing Users from LDAP](../guides/user_management.md#synchronizing-users-from-ldap)
+[Synchronize Users](../commands/index.md#synchronize-users)

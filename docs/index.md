@@ -18,6 +18,7 @@ Select **Development** if you installed `dev-main`.
 
 - [Login eligibility](guides/login_eligibility.md) covers login attributes, filters, and group-based sign-in restrictions.
 - [User management](guides/user_management.md) covers provisioning, account linking, hybrid login, and existing sessions.
+- [Spark commands](commands/index.md) covers linking existing users and synchronizing directory accounts.
 - [Troubleshooting](guides/troubleshooting.md) covers TLS, directory binds, and rejected logins.
 - [Configuration reference](references/configuration.md) lists settings, defaults, and limits.
 - [Directory diagnostics](references/diagnostics.md) covers programmatic connection and search checks.

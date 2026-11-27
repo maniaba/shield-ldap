@@ -45,116 +45,22 @@ profile field such as `directory_email`.
 
 ## Synchronizing Users from LDAP
 
-Run the command from a trusted administrative shell. Preview the changes for
-the `corporate` connection, then apply them after reviewing the results.
-
-```console
-php spark shield:ldap-sync corporate
-php spark shield:ldap-sync corporate --apply
-```
-
-The command uses the connection's service account over verified TLS. The
-directory must support LDAP paged results. The search combines `loginFilter`
-and `eligibilityFilter` across the configured user search bases. When
-`userBaseDn` is omitted, the search uses `baseDn`.
-
-Synchronization uses the same profile mapping and per-connection policies as
-sign-in. Enable `provisionUsers` to create accounts for eligible directory
-entries and map `username` in `profileAttributes`. Set `updateProfile` to
-`false` to apply mappings only when creating an account. The command skips
-reserved local accounts and uses the immutable directory identifier for
-existing links. Resolve a username collision through a verified account link.
-[Linking an Existing Shield User](#linking-an-existing-shield-user)
-
-The command requires a complete directory scan before applying any writes.
-Review duplicate identities and username conflicts in the output. Each user's
-changes are committed in a separate transaction, and the command reports a
-summary. If a run is interrupted, rerun the command from the beginning.
-Existing links identify users already processed. Synchronization changes only
-users represented in the directory scan.
+Use `shield:ldap-sync` from a trusted administrative shell to preview and apply
+provisioning and mapped profile updates in bulk.
+[Spark Commands](../commands/index.md#synchronize-users)
 
 ## Linking an Existing Shield User
 
 During migration, start with provisioning disabled. You can keep LDAP web
-sign-in disabled while preparing links from a trusted administrative shell.
-
-### Linking by Username with Spark
-
-Preview candidates for the `corporate` connection. The first command scans
-Shield users in batches. The second checks one Shield username. Both print
-matching directory identifiers and the status for each account in read-only
-mode.
-
-```console
-php spark shield:ldap-link corporate
-php spark shield:ldap-link corporate alex.rivera
-```
-
-The lookup uses the directory attribute configured in
-`profileAttributes['username']`. If there is no username mapping, the
-connection must have exactly one `loginAttributes` entry. The command uses
-the service account over verified TLS, applies `loginFilter` and
-`eligibilityFilter`, and checks for a unique match across all configured user
-search bases. It skips reserved local accounts and rejects conflicting links.
-
-Verify that the directory account belongs to the person who owns the Shield
-account, then apply the link for that username.
-
-```console
-php spark shield:ldap-link corporate alex.rivera --apply
-```
-
-The command repeats the directory lookup before writing. It stores only the
-LDAP identity link, keyed by the connection and the immutable directory
-identifier, such as the normalized AD `objectGUID` or an OpenLDAP `entryUUID`.
-
-### Linking Multiple Users
-
-Run the read-only scan and review the proposed matches before applying them
-together. Resolve username collisions or ambiguous directory matches first.
-
-```console
-php spark shield:ldap-link corporate
-php spark shield:ldap-link corporate --all --apply
-```
-
-Bulk mode adds missing links. It checks for duplicate local usernames and for
-multiple users matching the same LDAP object before any writes. It looks up
-each account again before saving its link. It reports individual conflicts and
-counts for linked, skipped, and conflicting accounts. Expected skips, such as
-an already linked user or a user without an eligible match, allow the run to
-continue.
-
-An unexpected directory error stops the run. Each completed link is saved
-independently. Run another preview before retrying to see the current results.
-
-### Repairing a Stale Link
-
-Recreating a directory account can give the same username a new immutable
-identifier. Preview the affected Shield user to see the `stale_link` status
-and the new directory identifier.
-
-```console
-php spark shield:ldap-link corporate alex.rivera
-```
-
-Verify that the new directory account belongs to this Shield user. Pass the
-identifier shown in the preview to repair the link for the selected connection.
-
-```console
-php spark shield:ldap-link corporate alex.rivera --apply --replace 00112233-4455-6677-8899-aabbccddeeff
-```
-
-The command requires exactly one existing link for the named user on that
-connection. It repeats the directory lookup and updates the link only if the
-new identifier matches `--replace` and is available. A changed identifier or
-an identity conflict blocks the repair.
+sign-in disabled while using `shield:ldap-link` to preview and link accounts by
+username from a trusted administrative shell.
+[Spark Commands](../commands/index.md#link-existing-users)
 
 ### Linking from Application Code
 
-For accounts with different usernames, verify the directory account in a
-trusted operator workflow and link its immutable identifier to the Shield user
-ID.
+In an application workflow, verify the directory account and select the Shield
+user who owns it. Create the link using the verified external identifier and
+selected Shield user ID.
 
 ```php
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;

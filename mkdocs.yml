@@ -75,6 +75,8 @@ nav:
     - Login Eligibility: guides/login_eligibility.md
     - User Management: guides/user_management.md
     - Troubleshooting: guides/troubleshooting.md
+  - Commands:
+    - Spark Commands: commands/index.md
   - References:
     - Configuration Reference: references/configuration.md
     - Directory Diagnostics: references/diagnostics.md

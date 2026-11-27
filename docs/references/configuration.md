@@ -36,7 +36,7 @@ is called. Use `connectionIds()` to list configured IDs.
 | `loginAttributes` | `['uid']` | List of 1 to 10 LDAP attributes accepted as a login identifier. The directory evaluates equality using its schema rules. |
 | `externalIdAttribute` | `'entryUUID'` | Immutable, single-valued LDAP attribute used to link the Shield user. Use `objectGUID` for Active Directory. |
 | `profileAttributes` | `[]` | Map of writable Shield user fields to single-valued directory attributes. Map `username` when provisioning users. |
-| `provisionUsers` | `false` | Creates a Shield user during successful LDAP sign-in or [directory synchronization](../guides/user_management.md#synchronizing-users-from-ldap) when there is no existing link. |
+| `provisionUsers` | `false` | Creates a Shield user during successful LDAP sign-in or [directory synchronization](../commands/index.md#synchronize-users) when there is no existing link. |
 | `eligibilityFilter` | `'(objectClass=*)'` | Additional trusted filter evaluated after password verification at sign-in and combined with `loginFilter` during synchronization. |
 | `updateProfile` | `true` | Updates mapped attributes on existing linked users during successful directory checks and synchronization. When `false`, mappings still apply on provisioning. |
 
