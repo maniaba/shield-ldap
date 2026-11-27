@@ -57,6 +57,20 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
         yield 'LDAPS' => ['ldaps'];
     }
 
+    public function testAuthenticatesOneUserAcrossMultipleSearchBases(): void
+    {
+        $entry = (new NativeLDAPDirectory())->authenticate(
+            $this->connection(),
+            [self::GROUP_BASE_DN, self::BASE_DN, self::USER_BASE_DN],
+            '(uid=alice)',
+            ['uid'],
+            'alicePassword!',
+        );
+
+        $this->assertSame('uid=alice,' . self::USER_BASE_DN, $entry['dn']);
+        $this->assertSame(['alice'], $entry['attributes']['uid']);
+    }
+
     public function testRejectsWrongCertificateHostname(): void
     {
         $host = getenv('SHIELD_LDAP_TEST_WRONG_HOST');

@@ -68,6 +68,31 @@ final class AuthLDAPTest extends TestCase
         $this->assertSame('metadata-test-password', $connection->bindPassword());
     }
 
+    /**
+     * @param list<string> $baseDns
+     */
+    #[DataProvider('provideAcceptsOrderedBaseDnLists')]
+    public function testAcceptsOrderedBaseDnLists(array $baseDns): void
+    {
+        $config              = new AuthLDAP();
+        $config->connections = ['corporate' => ['baseDn' => $baseDns] + self::CONNECTION_METADATA];
+
+        $this->assertSame($baseDns, $config->getConnection('corporate')->baseDn);
+    }
+
+    /**
+     * @return iterable<string, array{list<string>}>
+     */
+    public static function provideAcceptsOrderedBaseDnLists(): iterable
+    {
+        yield 'single base DN' => [['ou=users,dc=example,dc=test']];
+
+        yield 'ten base DNs' => [array_map(
+            static fn (int $id): string => "ou=team{$id},dc=example,dc=test",
+            range(10, 1),
+        )];
+    }
+
     #[DataProvider('provideLoadsNestedEnvironmentOverrides')]
     public function testLoadsNestedEnvironmentOverrides(string $separator): void
     {
@@ -184,6 +209,24 @@ final class AuthLDAPTest extends TestCase
         yield 'numeric host' => [['hosts' => [123]]];
 
         yield 'positional option' => [['starttls']];
+
+        yield 'blank base DN' => [['baseDn' => '   ']];
+
+        yield 'base DN with NUL byte' => [['baseDn' => "dc=example\0,dc=test"]];
+
+        yield 'empty base DN list' => [['baseDn' => []]];
+
+        yield 'too many base DNs' => [['baseDn' => array_fill(0, 11, 'dc=example,dc=test')]];
+
+        yield 'associative base DNs' => [['baseDn' => ['people' => 'dc=example,dc=test']]];
+
+        yield 'non-contiguous base DN indexes' => [['baseDn' => [0 => 'ou=people,dc=example,dc=test', 2 => 'ou=employees,dc=example,dc=test']]];
+
+        yield 'numeric base DN entry' => [['baseDn' => [123]]];
+
+        yield 'blank base DN entry' => [['baseDn' => ['dc=example,dc=test', '   ']]];
+
+        yield 'base DN entry with NUL byte' => [['baseDn' => ["dc=example\0,dc=test"]]];
     }
 
     public function testRejectsUnknownConnectionId(): void

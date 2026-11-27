@@ -23,6 +23,7 @@ use CodeIgniter\Shield\Result;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPDirectoryInterface;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPFilter;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;
+use Maniaba\ShieldLDAP\Authentication\LDAP\MultiBaseLDAPDirectoryInterface;
 use Maniaba\ShieldLDAP\Config\AuthLDAP;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
 
@@ -197,10 +198,17 @@ class LDAP extends Session
             $predicates[] = LDAPFilter::equal($attribute, $identifier);
         }
 
+        $baseDn    = $connection->userBaseDn ?? $connection->baseDn;
+        $directory = $this->directory;
+
+        if (is_array($baseDn) && ! $directory instanceof MultiBaseLDAPDirectoryInterface) {
+            throw new LDAPException('invalid_configuration');
+        }
+
         $filter = LDAPFilter::all($connection->loginFilter, LDAPFilter::any(...$predicates));
-        $entry  = $this->directory->authenticate(
+        $entry  = $directory->authenticate(
             $connection,
-            $connection->userBaseDn ?? $connection->baseDn,
+            $baseDn,
             $filter,
             array_values(array_unique([$connection->externalIdAttribute, ...array_values($connection->profileAttributes)])),
             $password,

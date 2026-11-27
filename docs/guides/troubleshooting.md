@@ -51,15 +51,16 @@ and directory policy. For `invalid_bind_secret`, confirm that the
 connection defines a nonempty bind password and that the environment
 overrides the correct configuration key. [Configuration](../getting_started/configuration.md)
 
-For `search_timeout` or `incomplete_search`, check the user search base,
+For `search_timeout` or `incomplete_search`, check each user search base,
 directory size limits, and whether the search spans naming contexts.
 Use a more selective base or filter. The native transport rejects
 referrals and incomplete login result sets.
 
 For `user_not_found`, `ambiguous_user`, or `ineligible_user`, preview the
 login and eligibility filters with the same service account. Check the
-search base, readable login attributes, and rules that determine account
-eligibility. An identifier must resolve to exactly one entry.
+configured search bases, readable login attributes, and rules that determine
+account eligibility. An identifier must resolve to exactly one entry across
+the effective search bases.
 [Login Eligibility](login_eligibility.md)
 
 ## Shield User and Login Action

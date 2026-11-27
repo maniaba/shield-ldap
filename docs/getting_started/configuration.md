@@ -127,6 +127,26 @@ identifier according to its schema. The identifier must be unique, readable, and
 stable across account renames and moves. See [Login Eligibility](../guides/login_eligibility.md)
 and the [configuration reference](../references/configuration.md).
 
+## Multiple Search Bases
+
+Set `baseDn` to a list of up to 10 distinguished names to search more than one
+subtree in a directory. For example, add these settings to the `corporate`
+connection to search two sibling organizational units in Active Directory.
+
+```php
+'baseDn' => [
+    'OU=Employees,DC=example,DC=com',
+    'OU=Contractors,DC=example,DC=com',
+],
+'userBaseDn' => null,
+```
+
+Set `userBaseDn` to `null` or omit it to use the list. A string `userBaseDn`
+overrides `baseDn` for user searches. The service account needs permission to
+search each configured base. The native transport checks for a single match
+across the selected bases before it verifies the password. See the
+[configuration reference](../references/configuration.md#login-and-eligibility-filters).
+
 ## Environment Overrides
 
 Keep **.env** outside version control. When a deployment environment requires

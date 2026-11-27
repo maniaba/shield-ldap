@@ -76,6 +76,8 @@ function ldap_set_option(Connection $connection, int $option, bool|int $value): 
 
 function ldap_bind(Connection $connection, string $dn, string $password): bool
 {
+    NativeLDAPStub::$operations[] = ['bind', $dn];
+
     $uri                       = NativeLDAPStub::$connected[array_key_last(NativeLDAPStub::$connected)];
     NativeLDAPStub::$lastError = NativeLDAPStub::$bindErrors[$uri] ?? 0;
 
@@ -103,14 +105,35 @@ function ldap_errno(Connection $connection): int
  */
 function ldap_search(Connection $connection, string $base, string $filter, array $attributes, int $attributesOnly, int $sizeLimit, int $timeLimit): false|stdClass
 {
-    NativeLDAPStub::$lastError = NativeLDAPStub::$searchCode;
+    NativeLDAPStub::$operations[] = ['search', $base];
 
-    return NativeLDAPStub::$searchFails ? false : new stdClass();
+    return scriptedSearch($base);
+}
+
+/**
+ * @param list<string> $attributes
+ */
+function ldap_read(Connection $connection, string $base, string $filter, array $attributes, int $attributesOnly, int $sizeLimit, int $timeLimit): false|stdClass
+{
+    NativeLDAPStub::$operations[] = ['read', $base];
+
+    return scriptedSearch($base);
+}
+
+function scriptedSearch(string $base): false|stdClass
+{
+    $code                      = NativeLDAPStub::$searchCodesByBase[$base] ?? NativeLDAPStub::$searchCode;
+    NativeLDAPStub::$lastError = $code;
+
+    return NativeLDAPStub::$searchFails ? false : (object) [
+        'code'    => $code,
+        'entries' => NativeLDAPStub::$entriesByBase[$base] ?? NativeLDAPStub::$entries,
+    ];
 }
 
 function ldap_parse_result(Connection $connection, stdClass $result, ?int &$code): bool
 {
-    $code = NativeLDAPStub::$searchCode;
+    $code = $result->code;
 
     return true;
 }
@@ -122,28 +145,30 @@ function ldap_first_reference(Connection $connection, stdClass $result): false|s
 
 function ldap_count_entries(Connection $connection, stdClass $result): int
 {
-    return count(NativeLDAPStub::$entries);
+    return count($result->entries);
 }
 
-function ldap_first_entry(Connection $connection, stdClass $result): false|int
+function ldap_first_entry(Connection $connection, stdClass $result): array|false
 {
-    return NativeLDAPStub::$entries === [] ? false : 0;
+    return $result->entries === [] ? false : ['entries' => $result->entries, 'offset' => 0];
 }
 
-function ldap_next_entry(Connection $connection, int $entry): false|int
+function ldap_next_entry(Connection $connection, array $entry): array|false
 {
-    $next = $entry + 1;
+    $entry['offset']++;
 
-    return array_key_exists($next, NativeLDAPStub::$entries) ? $next : false;
+    return isset($entry['entries'][$entry['offset']]) ? $entry : false;
 }
 
-function ldap_get_dn(Connection $connection, int $entry): string
+function ldap_get_dn(Connection $connection, array $entry): string
 {
-    return NativeLDAPStub::$entries[$entry];
+    return $entry['entries'][$entry['offset']];
 }
 
-function ldap_get_values_len(Connection $connection, int $entry, string $attribute): false
+function ldap_get_values_len(Connection $connection, array $entry, string $attribute): array|false
 {
-    // These cases only inspect distinguished names, so no attributes are returned.
-    return false;
+    $dn     = $entry['entries'][$entry['offset']];
+    $values = NativeLDAPStub::$attributesByDn[$dn][strtolower($attribute)] ?? null;
+
+    return $values === null ? false : $values + ['count' => count($values)];
 }
