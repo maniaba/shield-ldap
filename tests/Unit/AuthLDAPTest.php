@@ -41,6 +41,7 @@ final class AuthLDAPTest extends TestCase
         'provisionUsers'      => true,
         'eligibilityFilter'   => '(accountStatus=active)',
         'updateProfile'       => false,
+        'verifyCertificate'   => true,
     ];
 
     public function testDefaultConfigurationHasNoConnections(): void
@@ -66,6 +67,14 @@ final class AuthLDAPTest extends TestCase
         $this->assertSame('corporate', $connection->id);
         $this->assertSame($metadata, array_intersect_key(get_object_vars($connection), $metadata));
         $this->assertSame('metadata-test-password', $connection->bindPassword());
+    }
+
+    public function testAcceptsExplicitCertificateVerificationOptOut(): void
+    {
+        $config              = new AuthLDAP();
+        $config->connections = ['corporate' => ['verifyCertificate' => false] + self::CONNECTION_METADATA];
+
+        $this->assertFalse($config->getConnection('corporate')->verifyCertificate);
     }
 
     /**
@@ -99,10 +108,11 @@ final class AuthLDAPTest extends TestCase
     public function testLoadsNestedEnvironmentOverrides(string $separator): void
     {
         $overrides = [
-            'authldap.connections.corporate.bindPassword'   => 'environment-test-password',
-            'authldap.connections.corporate.hosts.0'        => 'ldap-env.example.test',
-            'authldap.connections.corporate.port'           => '1636',
-            'authldap.connections.corporate.provisionUsers' => 'false',
+            'authldap.connections.corporate.bindPassword'      => 'environment-test-password',
+            'authldap.connections.corporate.hosts.0'           => 'ldap-env.example.test',
+            'authldap.connections.corporate.port'              => '1636',
+            'authldap.connections.corporate.provisionUsers'    => 'false',
+            'authldap.connections.corporate.verifyCertificate' => 'false',
         ];
 
         $original = [];
@@ -126,6 +136,7 @@ final class AuthLDAPTest extends TestCase
             $this->assertSame(['ldap-env.example.test', 'ldap-backup.example.test'], $connection->hosts);
             $this->assertSame(1636, $connection->port);
             $this->assertFalse($connection->provisionUsers);
+            $this->assertFalse($connection->verifyCertificate);
         } finally {
             foreach ($original as $key => $value) {
                 putenv($value === false ? $key : $key . '=' . $value);
@@ -207,6 +218,8 @@ final class AuthLDAPTest extends TestCase
         yield 'nested connection ID' => [['id' => 'invalid-inline-id']];
 
         yield 'invalid port type' => [['port' => 'not-a-port']];
+
+        yield 'invalid certificate verification type' => [['verifyCertificate' => 'not-a-bool']];
 
         yield 'numeric host' => [['hosts' => [123]]];
 

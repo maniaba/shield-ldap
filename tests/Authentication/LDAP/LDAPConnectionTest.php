@@ -42,6 +42,7 @@ final class LDAPConnectionTest extends TestCase
         $this->assertSame($timeout, $connection->connectTimeout);
         $this->assertSame($timeout, $connection->searchTimeout);
         $this->assertSame($hosts, $connection->hosts);
+        $this->assertTrue($connection->verifyCertificate);
     }
 
     /**

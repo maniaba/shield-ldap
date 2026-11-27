@@ -307,6 +307,31 @@ final class NativeLDAPTransportTest extends TestCase
         }
     }
 
+    public function testDoesNotStartTlsOrBindWhenCertificateVerificationOverrideCannotBeApplied(): void
+    {
+        $connection = new LDAPConnection(
+            'test',
+            ['first.example.test'],
+            self::BASE_DN,
+            'cn=reader,' . self::BASE_DN,
+            'readerPassword!',
+            'starttls',
+            verifyCertificate: false,
+        );
+        NativeLDAPStub::$certificateOptionSucceeds = false;
+
+        $supported = PHP_VERSION_ID >= 80408 || (PHP_VERSION_ID >= 80322 && PHP_VERSION_ID < 80400);
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage($supported ? 'tls_context_failed' : 'tls_verification_override_unsupported');
+
+        try {
+            (new NativeLDAPDirectory())->testBind($connection);
+        } finally {
+            $this->assertSame(0, NativeLDAPStub::$tlsStarts);
+            $this->assertSame([], NativeLDAPStub::$operations);
+        }
+    }
+
     public function testNativeTraceRedactsSubmittedAndServicePasswords(): void
     {
         $this->assertNotFalse(ini_set('zend.exception_ignore_args', '0'));

@@ -28,6 +28,7 @@ if (! \extension_loaded('ldap')) {
         'LDAP_OPT_X_TLS_REQUIRE_CERT' => 24_582,
         'LDAP_OPT_X_TLS_DEMAND'       => 2,
         'LDAP_OPT_X_TLS_HARD'         => 1,
+        'LDAP_OPT_X_TLS_NEVER'        => 0,
         'LDAP_OPT_PROTOCOL_VERSION'   => 17,
         'LDAP_OPT_REFERRALS'          => 8,
         'LDAP_OPT_DEREF'              => 2,
@@ -71,6 +72,13 @@ function ldap_get_option(Connection $connection, int $option, int|string|null &$
 
 function ldap_set_option(Connection $connection, int $option, bool|int $value): bool
 {
+    return $option !== LDAP_OPT_X_TLS_REQUIRE_CERT || NativeLDAPStub::$certificateOptionSucceeds;
+}
+
+function ldap_start_tls(Connection $connection): bool
+{
+    NativeLDAPStub::$tlsStarts++;
+
     return true;
 }
 

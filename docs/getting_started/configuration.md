@@ -28,9 +28,35 @@ default. Enable it after configuring your directory and [web login](../quick_sta
 
 Use `ldaps` for listeners that negotiate TLS as soon as they accept a connection
 (normally port 636). Use `starttls` for listeners that accept the LDAP StartTLS
-operation before bind (normally port 389). The native transport requires TLS
-validation and rejects referrals. Each process uses the same OpenLDAP client
-trust policy for its configured directories.
+operation before bind (normally port 389). The native transport verifies
+certificates by default and rejects referrals. Verified connections use the
+OpenLDAP client trust policy for the PHP process.
+
+### Local TLS Testing
+
+For controlled local testing with StartTLS, declare `verifyCertificate` in your
+connection settings in **app/Config/AuthLDAP.php**. For a connection named
+`default`, add these entries to `$connections['default']`.
+
+```php
+'encryption'        => 'starttls',
+'verifyCertificate' => true,
+```
+
+Override the option in the testing environment's **.env**.
+
+```ini
+authldap.connections.default.verifyCertificate = false
+```
+
+!!! warning
+    Setting this option to `false` skips certificate chain and hostname checks.
+    StartTLS is still required, but the client cannot verify the server's
+    identity. Keep certificate verification enabled in production.
+
+The native transport supports this override for StartTLS starting with PHP
+8.3.22 in the 8.3 series and PHP 8.4.8 in the 8.4 series. PHP 8.5 and later also
+support it. LDAPS and earlier PHP versions reject the override.
 
 ## Active Directory
 

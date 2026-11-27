@@ -27,6 +27,7 @@ is called. Use `connectionIds()` to list configured IDs.
 | `bindDn` | Required | DN of the read-only lookup account. |
 | `bindPassword` | Required | Nonempty service-account password. Use an [environment override](../getting_started/configuration.md#environment-overrides) or an [application-owned provider](diagnostics.md#custom-connection-providers). |
 | `encryption` | `'ldaps'` | Use `'ldaps'` or `'starttls'`. |
+| `verifyCertificate` | `true` | Verifies the server certificate chain and hostname. Set to `false` only for [local StartTLS testing](../getting_started/configuration.md#local-tls-testing). |
 | `port` | `null` | Integer from 1 to 65535. With `null`, LDAPS uses 636 and StartTLS uses 389. |
 | `connectTimeout` | `5` | Network connection timeout in seconds, from 1 to 60. |
 | `searchTimeout` | `5` | LDAP operation and search time limit in seconds, from 1 to 60. |

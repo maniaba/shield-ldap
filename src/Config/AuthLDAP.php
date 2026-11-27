@@ -34,8 +34,8 @@ class AuthLDAP extends BaseConfig
     public string $defaultConnection = '';
 
     /**
-     * Directory settings keyed by connection ID. Declare bindPassword to allow
-     * CodeIgniter to override it through authldap.connections.<id>.bindPassword.
+     * Directory settings keyed by connection ID. Declare options in the array
+     * to allow CodeIgniter overrides through authldap.connections.<id>.<option>.
      *
      * @var array<string, array<string, mixed>>
      */
@@ -46,6 +46,7 @@ class AuthLDAP extends BaseConfig
         //     'bindDn'              => 'CN=shield-reader,OU=Service Accounts,DC=example,DC=com',
         //     'bindPassword'        => '',
         //     'encryption'          => 'ldaps',
+        //     'verifyCertificate'   => true,
         //     'userBaseDn'          => 'OU=Users,DC=example,DC=com',
         //     'loginFilter'         => '(&(objectCategory=person)(objectClass=user))',
         //     'loginAttributes'     => ['sAMAccountName', 'userPrincipalName'],

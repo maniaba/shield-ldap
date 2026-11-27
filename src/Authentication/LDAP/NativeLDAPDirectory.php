@@ -18,7 +18,7 @@ use Maniaba\ShieldLDAP\Exceptions\LDAPException;
 use SensitiveParameter;
 
 /**
- * Implements directory operations with PHP's LDAP extension and verified TLS.
+ * Implements directory operations with PHP's LDAP extension over TLS.
  *
  * @phpstan-type DirectoryEntry array{dn: string, attributes: array<string, list<string>>}
  */
@@ -194,11 +194,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface
 
     private function configure(Connection $ldap, LDAPConnection $connection): void
     {
-        if (! ldap_get_option($ldap, LDAP_OPT_X_TLS_REQUIRE_CERT, $requireCert)
-            || ! in_array($requireCert, [LDAP_OPT_X_TLS_DEMAND, LDAP_OPT_X_TLS_HARD], true)
-        ) {
-            throw new LDAPException('tls_verification_required');
-        }
+        $this->configureCertificateVerification($ldap, $connection);
 
         if (! ldap_set_option($ldap, LDAP_OPT_PROTOCOL_VERSION, 3)
             || ! ldap_set_option($ldap, LDAP_OPT_REFERRALS, false)
@@ -207,6 +203,31 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface
             || ! ldap_set_option($ldap, LDAP_OPT_TIMEOUT, $connection->searchTimeout)
         ) {
             throw new LDAPException('connection_configuration_failed');
+        }
+    }
+
+    private function configureCertificateVerification(Connection $ldap, LDAPConnection $connection): void
+    {
+        if ($connection->verifyCertificate) {
+            if (! ldap_get_option($ldap, LDAP_OPT_X_TLS_REQUIRE_CERT, $requireCert)
+                || ! in_array($requireCert, [LDAP_OPT_X_TLS_DEMAND, LDAP_OPT_X_TLS_HARD], true)
+            ) {
+                throw new LDAPException('tls_verification_required');
+            }
+
+            return;
+        }
+
+        // Supported ext-ldap releases rebuild the TLS context per handle for StartTLS.
+        // LDAPS uses a process-wide context and cannot safely apply this override.
+        if ($connection->encryption !== 'starttls' || ! defined('LDAP_OPT_X_TLS_NEVER')
+                                                   || PHP_VERSION_ID < 80322 || (PHP_VERSION_ID >= 80400 && PHP_VERSION_ID < 80408)
+        ) {
+            throw new LDAPException('tls_verification_override_unsupported');
+        }
+
+        if (! @ldap_set_option($ldap, LDAP_OPT_X_TLS_REQUIRE_CERT, LDAP_OPT_X_TLS_NEVER)) {
+            throw new LDAPException('tls_context_failed');
         }
     }
 
