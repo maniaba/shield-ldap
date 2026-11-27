@@ -263,11 +263,10 @@ final class LDAPLoginTest extends DatabaseTestCase
         $authOptions = get_object_vars(config('Auth'));
         $dummyHash   = $authOptions['dummyPasswordHash'] ?? null;
         $passwords   = $this->createMock(Passwords::class);
+        $passwords->expects($this->never())->method('hash');
         if ($dummyHash !== null) {
             $passwords->expects($this->once())->method('verify')->with('local-password', $dummyHash)->willReturn(true);
-            $passwords->expects($this->never())->method('hash');
         } else {
-            $passwords->expects($this->once())->method('hash')->with('')->willReturn('discarded-hash');
             $passwords->expects($this->never())->method('verify');
         }
         Services::injectMock('passwords', $passwords);

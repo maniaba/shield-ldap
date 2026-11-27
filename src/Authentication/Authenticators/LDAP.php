@@ -243,10 +243,7 @@ class LDAP extends Session
             $authOptions = get_object_vars(config('Auth'));
             $dummyHash   = $authOptions['dummyPasswordHash'] ?? null;
 
-            if ($dummyHash === null) {
-                // Match the configured password hashing cost on older Shield releases.
-                $passwords->hash('');
-            } else {
+            if ($dummyHash !== null) {
                 $passwords->verify($password, $dummyHash);
             }
 
