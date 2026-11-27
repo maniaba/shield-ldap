@@ -35,4 +35,6 @@ request guidelines.
 
 ## License
 
-Shield LDAP is distributed under the [MIT License](LICENSE).
+Shield LDAP is maintained by [maniaba](https://github.com/maniaba) and distributed
+under the [MIT License](LICENSE). The license file includes the copyright notices
+for code adapted from CodeIgniter Shield.

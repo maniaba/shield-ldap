@@ -25,8 +25,10 @@ Run `composer test` for the PHPUnit suite. Run `composer test:ldap` for the
 native OpenLDAP integration suite when changing the LDAP transport. See the
 [testing guide](docs/references/testing.md) for integration prerequisites.
 
-Follow the CodeIgniter coding standard. Run `composer cs` to check formatting,
-or `composer cs-fix` to apply it. Run `composer analyze` for static analysis.
+Follow the CodeIgniter coding standard and include the Shield LDAP MIT header in
+every PHP file, including `.inc` files. Run `composer cs-fix` to add the header
+and apply formatting. The `composer cs` check verifies both locally and in CI.
+Run `composer analyze` for static analysis.
 `composer ci` runs the style, analysis, inspection, and PHPUnit checks together.
 
 ## Documentation
