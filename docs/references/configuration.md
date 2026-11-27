@@ -40,7 +40,7 @@ is called. Use `connectionIds()` to list configured IDs.
 | `groupMappings` | `null` | Map from existing Shield group keys to full LDAP group DNs on this connection. An empty array withdraws prior grants when group synchronization runs. `null` disables group management. See [Map LDAP Groups to Shield Groups](../getting_started/configuration.md#map-ldap-groups-to-shield-groups). |
 | `syncGroupsOnLogin` | `true` | Checks mapped group membership and updates Shield grants during LDAP sign-in. Set to `false` to leave these updates to the group-only Spark command. |
 | `syncProfileOnLogin` | `true` | Allows mapped profile updates for existing Shield users during LDAP sign-in when `updateProfile` is enabled. Provisioning still uses mapped fields when enabled. The Spark command uses `updateProfile` independently. |
-| `provisionUsers` | `false` | Creates a Shield user during successful LDAP sign-in or [directory synchronization](../commands/index.md#synchronize-users) when there is no existing link. |
+| `provisionUsers` | `false` | Creates a Shield user during successful LDAP sign-in or [directory synchronization](../commands/ldap-sync.md) when there is no existing link. |
 | `eligibilityFilter` | `'(objectClass=*)'` | Additional trusted filter evaluated after password verification at sign-in and combined with `loginFilter` during synchronization. |
 | `updateProfile` | `true` | Updates mapped attributes on existing linked users during successful directory checks and synchronization. When `false`, mappings still apply on provisioning. |
 

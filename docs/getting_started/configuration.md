@@ -220,7 +220,7 @@ assignments are stored.
 Set `groupMappings` to an empty array to revoke this connection's previous
 grants when group synchronization runs. Omitting the option or setting it to
 `null` disables group management for that connection. See
-[Move Sign-In Updates to Scheduled Commands](../commands/index.md#move-sign-in-updates-to-scheduled-commands)
+[Move Sign-In Updates to Scheduled Commands](../commands/ldap-sync.md#move-sign-in-updates-to-scheduled-commands)
 to control when group and profile updates run.
 
 ## Environment Overrides

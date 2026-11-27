@@ -76,7 +76,9 @@ nav:
     - User Management: guides/user_management.md
     - Troubleshooting: guides/troubleshooting.md
   - Commands:
-    - Spark Commands: commands/index.md
+    - Overview: commands/index.md
+    - Link Existing Users: commands/ldap-link.md
+    - Synchronize Users: commands/ldap-sync.md
   - References:
     - Configuration Reference: references/configuration.md
     - Directory Diagnostics: references/diagnostics.md
