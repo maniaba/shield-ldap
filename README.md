@@ -17,11 +17,10 @@ Install a stable release from Packagist with Composer once one is available.
 composer require maniaba/shield-ldap
 ```
 
-To install the development branch currently available on Packagist, specify its
-version explicitly.
+To install from the development branch, specify its version explicitly.
 
 ```console
-composer require maniaba/shield-ldap:dev-main
+composer require maniaba/shield-ldap:dev-develop
 ```
 
 See the [Shield LDAP User Guide](https://maniaba.github.io/shield-ldap/latest/) for

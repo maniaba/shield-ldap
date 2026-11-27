@@ -47,7 +47,7 @@ composer require 'codeigniter4/shield:~1.4.1' maniaba/shield-ldap
 To install the development branch from Packagist, require its version explicitly.
 
 ```console
-composer require maniaba/shield-ldap:dev-main
+composer require maniaba/shield-ldap:dev-develop
 ```
 
 Select **Development** in the guide's version selector when using this branch.

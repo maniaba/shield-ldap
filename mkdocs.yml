@@ -2,7 +2,7 @@ site_name: Shield LDAP
 site_description: LDAP and Active Directory authentication for CodeIgniter Shield
 site_url: https://maniaba.github.io/shield-ldap/
 repo_url: https://github.com/maniaba/shield-ldap
-edit_uri: edit/main/docs/
+edit_uri: edit/develop/docs/
 strict: true
 
 exclude_docs: |
