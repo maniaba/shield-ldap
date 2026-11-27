@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 /**
- * This file is part of CodeIgniter Shield.
+ * This file is part of Shield LDAP.
  *
- * (c) CodeIgniter Foundation <admin@codeigniter.com>
+ * Copyright (c) 2026 maniaba
+ * SPDX-License-Identifier: MIT
  *
- * For the full copyright and license information, please view
- * the LICENSE file that was distributed with this source code.
+ * See the LICENSE file for the full copyright and license information.
  */
 
 use CodeIgniter\CodingStandard\CodeIgniter4;
@@ -16,21 +16,25 @@ use Nexus\CsConfig\Factory;
 use PhpCsFixer\Finder;
 
 $finder = Finder::create()
-    ->files()
-    ->in([
-        __DIR__ . '/src/',
-        __DIR__ . '/tests/',
-    ])
-    ->exclude('build')
-    ->append([
-        __FILE__,
-        __DIR__ . '/rector.php',
-        __DIR__ . '/psalm_autoload.php',
-    ]);
+    ->in(__DIR__)
+    ->name('*.inc')
+    ->ignoreDotFiles(false)
+    ->exclude(['.idea', '.venv', 'build', 'site', 'tmp', 'vendor', 'writable']);
 
 $overrides = [
     'declare_strict_types' => true,
     'void_return'          => true,
+    'header_comment'       => [
+        'comment_type' => 'PHPDoc',
+        'header'       => <<<'HEADER'
+            This file is part of Shield LDAP.
+
+            Copyright (c) 2026 maniaba
+            SPDX-License-Identifier: MIT
+
+            See the LICENSE file for the full copyright and license information.
+            HEADER,
+    ],
 ];
 
 $options = [
@@ -38,8 +42,4 @@ $options = [
     'cacheFile' => 'build/.php-cs-fixer.cache',
 ];
 
-return Factory::create(new CodeIgniter4(), $overrides, $options)->forLibrary(
-    'CodeIgniter Shield',
-    'CodeIgniter Foundation',
-    'admin@codeigniter.com',
-);
+return Factory::create(new CodeIgniter4(), $overrides, $options)->forProjects();
