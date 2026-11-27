@@ -56,12 +56,13 @@ GitHub Actions checks both branches.
 
 ## Releasing Shield LDAP
 
-1. Branch from the reviewed `develop` commit. Name the branch for the release,
-   such as `release/v1.0.0`, and add a matching entry to
-   [CHANGELOG.md](CHANGELOG.md). Open the release pull request against `main`.
-2. Review the release diff and wait for GitHub Actions to pass. Merge the PR
-   with **Create a merge commit** to preserve the development history.
-3. Fetch `main` and confirm its tip matches the release PR's merge commit.
+1. Create a preparation branch from `develop`, such as `release/v1.0.0`. Add
+   the matching entry to [CHANGELOG.md](CHANGELOG.md) and open a pull request
+   against `develop`. Review it and merge once GitHub Actions passes.
+2. Open a pull request to `main` from the prepared `develop` commit. Review the
+   release diff and wait for GitHub Actions to pass, then use
+   **Create a merge commit** to preserve the development history.
+3. Fetch `main` and confirm its tip matches the promotion PR's merge commit.
    Create and push a signed, annotated tag for that commit. For example, for
    `v1.0.0` run the following commands after verifying the commit.
 
@@ -80,8 +81,7 @@ GitHub Actions checks both branches.
    ```
 
 5. Check that Packagist lists the new version and that the User Guide workflow
-   publishes the numbered guide and updates `/latest/`. Open a PR from
-   `main` back into `develop` to carry the changelog and release history forward.
+   publishes the numbered guide and updates `/latest/`.
 
 Composer derives the package version from the Git tag.
 [Composer versioning for libraries](https://getcomposer.org/doc/02-libraries.md#library-versioning)

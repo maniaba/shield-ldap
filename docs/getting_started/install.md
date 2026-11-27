@@ -28,8 +28,8 @@ Shield LDAP uses the existing Shield user, identity, and login tables.
 
 ### Stable Release
 
-Install a stable release from [Packagist](https://packagist.org/packages/maniaba/shield-ldap).
-Run Composer from your application's root directory.
+Install a stable release from [Packagist](https://packagist.org/packages/maniaba/shield-ldap)
+once one is available. Run Composer from your application's root directory.
 
 ```console
 composer require maniaba/shield-ldap

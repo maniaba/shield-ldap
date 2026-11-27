@@ -11,7 +11,7 @@ Install Shield and set up its database tables first. Shield LDAP requires PHP
 compatible CodeIgniter 4 release. The native transport requires PHP's `ldap`
 extension linked against OpenLDAP.
 
-Install a stable release from Packagist with Composer.
+Install a stable release from Packagist with Composer once one is available.
 
 ```console
 composer require maniaba/shield-ldap
