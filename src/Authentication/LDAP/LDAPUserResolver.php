@@ -147,6 +147,77 @@ final readonly class LDAPUserResolver
     }
 
     /**
+     * Report the state of a proposed link for an existing Shield user.
+     *
+     * @return 'already_linked'|'candidate'|'stale_link'
+     *
+     * @throws LDAPException If the link is ambiguous or the key is already assigned elsewhere.
+     */
+    public function inspectLink(User $user, string $connectionId, string $externalId): string
+    {
+        $key      = $this->identityKey($connectionId, $externalId);
+        $identity = $this->identityForLink($user, $connectionId, $key);
+
+        if ($identity === null) {
+            return 'candidate';
+        }
+
+        return $identity->secret === $key ? 'already_linked' : 'stale_link';
+    }
+
+    /**
+     * Replace one existing link after the caller verifies the new directory ID and authorizes the change.
+     *
+     * @return bool Whether the link was changed.
+     */
+    public function replaceLink(
+        string $connectionId,
+        string $externalId,
+        int|string $userId,
+        string $expectedUsername,
+    ): bool {
+        $key = $this->identityKey($connectionId, $externalId);
+
+        return $this->atomically(function () use ($connectionId, $key, $userId, $expectedUsername): bool {
+            $user = $this->findUser($userId);
+            if ($user->username !== $expectedUsername) {
+                throw new LDAPException('identity_conflict');
+            }
+
+            $identity = $this->identityForLink($user, $connectionId, $key);
+            if ($identity?->id === null) {
+                throw new LDAPException('identity_conflict');
+            }
+
+            if ($identity->secret === $key) {
+                return false;
+            }
+
+            $this->identities->where([
+                'user_id' => $userId,
+                'type'    => self::ID_TYPE,
+                'name'    => $connectionId,
+                'secret'  => $identity->secret,
+            ])->update($identity->id, new UserIdentity(['secret' => $key]));
+
+            if ($this->identities->builder()->db()->affectedRows() !== 1) {
+                throw new LDAPException('synchronization_conflict');
+            }
+
+            $updated = $this->identities->getIdentityBySecret(self::ID_TYPE, $key);
+            if ($updated?->id !== $identity->id
+                || (string) $updated->user_id !== (string) $userId
+                || $updated->name !== $connectionId
+                || $updated->secret !== $key
+            ) {
+                throw new LDAPException('synchronization_conflict');
+            }
+
+            return true;
+        });
+    }
+
+    /**
      * Read the configured immutable identifier and normalize binary Active Directory GUIDs.
      *
      * @param array<string, list<string>> $attributes
@@ -196,6 +267,34 @@ final readonly class LDAPUserResolver
         }
 
         return $identity !== null;
+    }
+
+    private function identityForLink(User $user, string $connectionId, string $key): ?UserIdentity
+    {
+        $selected = null;
+
+        foreach ($this->identities->getIdentitiesByTypes($user, [self::ID_TYPE]) as $identity) {
+            if ($identity->name !== $connectionId) {
+                continue;
+            }
+
+            if ($selected !== null) {
+                throw new LDAPException('identity_conflict');
+            }
+
+            $selected = $identity;
+        }
+
+        $owner = $this->identities->getIdentityBySecret(self::ID_TYPE, $key);
+        if ($owner !== null && ($selected === null
+            || $selected->id !== $owner->id
+            || (string) $owner->user_id !== (string) $user->id
+            || $owner->secret !== $key)
+        ) {
+            throw new LDAPException('identity_conflict');
+        }
+
+        return $selected;
     }
 
     private function identityKey(string $connectionId, string $externalId): string
@@ -300,9 +399,13 @@ final readonly class LDAPUserResolver
     }
 
     /**
-     * @param Closure(): User $operation
+     * @template T of bool|User
+     *
+     * @param Closure(): T $operation
+     *
+     * @return T
      */
-    private function atomically(Closure $operation): User
+    private function atomically(Closure $operation): bool|User
     {
         try {
             $database = $this->users->builder()->db();
@@ -319,12 +422,12 @@ final readonly class LDAPUserResolver
             $database->transStrict(false);
 
             try {
-                $user = $operation();
+                $result = $operation();
                 if (! $database->transComplete()) {
                     throw new LDAPException('synchronization_conflict');
                 }
 
-                return $user;
+                return $result;
             } finally {
                 try {
                     if ($database->transDepth !== 0) {
