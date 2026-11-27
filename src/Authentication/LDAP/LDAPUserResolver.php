@@ -15,8 +15,10 @@ namespace Maniaba\ShieldLDAP\Authentication\LDAP;
 
 use Closure;
 use CodeIgniter\Database\BaseConnection;
+use CodeIgniter\I18n\Time;
 use CodeIgniter\Shield\Entities\User;
 use CodeIgniter\Shield\Entities\UserIdentity;
+use CodeIgniter\Shield\Models\GroupModel;
 use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Shield\Models\UserModel;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
@@ -46,6 +48,7 @@ final readonly class LDAPUserResolver
      * LDAP contact addresses cannot modify the local email/password identity.
      *
      * @param array<string, string|null> $profile
+     * @param list<string>               $groups  Verified Shield group keys
      */
     public function resolve(
         string $connectionId,
@@ -53,61 +56,108 @@ final readonly class LDAPUserResolver
         array $profile = [],
         bool $provision = false,
         bool $updateProfile = true,
+        array $groups = [],
     ): User {
         $key     = $this->identityKey($connectionId, $externalId);
         $profile = $this->validateProfile($profile);
 
-        return $this->atomically(function () use ($connectionId, $key, $profile, $provision, $updateProfile): User {
-            $identity = $this->identities->getIdentityBySecret(self::ID_TYPE, $key);
+        return $this->atomically(function () use ($connectionId, $key, $profile, $provision, $updateProfile, $groups): User {
+            $user = $this->resolveIdentity($connectionId, $key, $profile, $provision, $updateProfile);
 
-            if ($identity === null) {
-                if (! $provision) {
-                    throw new LDAPException('user_not_provisioned');
-                }
-
-                $username = $profile['username'] ?? null;
-                if ($username === null) {
-                    throw new LDAPException('invalid_profile');
-                }
-
-                $this->checkUsername($username);
-
-                $userId = $this->users->insert($profile);
-                if ($userId === true) {
-                    throw new LDAPException('synchronization_conflict');
-                }
-
-                $user = $this->readBackProfile($userId, $profile);
-                $this->createIdentity($connectionId, $key, $userId);
-
-                return $user;
+            if ($groups !== [] && ! $user->isBanned() && $user->isActivated()) {
+                $this->assignGroups($user, $groups);
             }
 
-            $user = $this->findUser($identity->user_id);
-            if (! $updateProfile || $user->isBanned() || ! $user->isActivated()) {
-                return $user;
-            }
-
-            $stored = $user->toRawArray();
-
-            foreach ($profile as $field => $value) {
-                if (array_key_exists($field, $stored) && $stored[$field] === $value) {
-                    unset($profile[$field]);
-                }
-            }
-
-            if ($profile === []) {
-                return $user;
-            }
-
-            if (isset($profile['username'])) {
-                $this->checkUsername($profile['username'], $identity->user_id);
-            }
-
-            $this->users->update($identity->user_id, $profile);
-
-            return $this->readBackProfile($identity->user_id, $profile);
+            return $user;
         });
+    }
+
+    /**
+     * @param array<string, string|null> $profile
+     */
+    private function resolveIdentity(string $connectionId, string $key, array $profile, bool $provision, bool $updateProfile): User
+    {
+        $identity = $this->identities->getIdentityBySecret(self::ID_TYPE, $key);
+
+        if ($identity === null) {
+            if (! $provision) {
+                throw new LDAPException('user_not_provisioned');
+            }
+
+            $username = $profile['username'] ?? null;
+            if ($username === null) {
+                throw new LDAPException('invalid_profile');
+            }
+
+            $this->checkUsername($username);
+
+            $userId = $this->users->insert($profile);
+            if ($userId === true) {
+                throw new LDAPException('synchronization_conflict');
+            }
+
+            $user = $this->readBackProfile($userId, $profile);
+            $this->createIdentity($connectionId, $key, $userId);
+
+            return $user;
+        }
+
+        $user = $this->findUser($identity->user_id);
+        if (! $updateProfile || $user->isBanned() || ! $user->isActivated()) {
+            return $user;
+        }
+
+        $stored = $user->toRawArray();
+
+        foreach ($profile as $field => $value) {
+            if (array_key_exists($field, $stored) && $stored[$field] === $value) {
+                unset($profile[$field]);
+            }
+        }
+
+        if ($profile === []) {
+            return $user;
+        }
+
+        if (isset($profile['username'])) {
+            $this->checkUsername($profile['username'], $identity->user_id);
+        }
+
+        $this->users->update($identity->user_id, $profile);
+
+        return $this->readBackProfile($identity->user_id, $profile);
+    }
+
+    /**
+     * @param non-empty-list<string> $groups
+     */
+    private function assignGroups(User $user, array $groups): void
+    {
+        $model = model(GroupModel::class);
+
+        if ($this->users->builder()->db() !== $model->builder()->db()) {
+            throw new LDAPException('synchronization_conflict');
+        }
+
+        $existing = $model->getForUser($user);
+        $missing  = array_diff(array_unique($groups), $existing);
+        $rows     = [];
+        $now      = Time::now();
+
+        foreach ($missing as $group) {
+            if ($group === '' || ! $model->isValidGroup($group)) {
+                throw new LDAPException('invalid_configuration');
+            }
+
+            $rows[] = ['user_id' => $user->id, 'group' => $group, 'created_at' => $now];
+        }
+
+        // Insert only new memberships. Shield's User::addGroup() rewrites the group set.
+        if ($rows !== [] && $model->insertBatch($rows) !== count($rows)) {
+            throw new LDAPException('synchronization_conflict');
+        }
+
+        $user->setGroupsCache([...$existing, ...array_values($missing)]);
     }
 
     /**

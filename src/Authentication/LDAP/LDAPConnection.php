@@ -33,6 +33,7 @@ final readonly class LDAPConnection
      * @param list<string>|string|null $userBaseDn
      * @param array<int, string>       $loginAttributes
      * @param array<string, string>    $profileAttributes Local user field to LDAP attribute
+     * @param array<string, string>    $groupMappings     Shield group key to LDAP group DN
      *
      * @throws LDAPException If the connection settings are invalid.
      */
@@ -55,6 +56,7 @@ final readonly class LDAPConnection
         public string $eligibilityFilter = '(objectClass=*)',
         public bool $updateProfile = true,
         public bool $verifyCertificate = true,
+        public array $groupMappings = [],
     ) {
         if (preg_match('/\A[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}\z/', $id) !== 1
             || $hosts === [] || count($hosts) > 10 || ! array_is_list($hosts)
@@ -66,6 +68,8 @@ final readonly class LDAPConnection
             || array_filter($hosts, is_string(...)) !== $hosts
             || array_filter($loginAttributes, is_string(...)) !== $loginAttributes
             || array_filter($profileAttributes, is_string(...)) !== $profileAttributes
+            || array_filter($groupMappings, is_string(...)) !== $groupMappings
+            || array_filter($groupMappings, is_string(...), ARRAY_FILTER_USE_KEY) !== $groupMappings
         ) {
             throw new LDAPException('invalid_configuration');
         }
@@ -94,6 +98,12 @@ final readonly class LDAPConnection
 
         foreach ([$externalIdAttribute, ...$loginAttributes, ...array_values($profileAttributes)] as $attribute) {
             LDAPFilter::validateAttribute($attribute);
+        }
+
+        foreach ($groupMappings as $group => $dn) {
+            if (trim($group) === '' || strtolower($group) !== $group || ! self::isValidBaseDn($dn)) {
+                throw new LDAPException('invalid_configuration');
+            }
         }
 
         // A closure keeps the secret out of JSON, var_export(), and serialization.

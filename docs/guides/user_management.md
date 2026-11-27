@@ -94,9 +94,16 @@ enabling remembered sign-ins.
 
 ## Authorization
 
-Directory group filters control who may sign in. Manage groups and
-permissions with [Shield authorization](https://github.com/codeigniter4/shield/blob/develop/docs/references/authorization.md),
-including assignment of any groups your application requires for new users.
+Directory group filters control who may sign in. Configure connection-level
+[`groupMappings`](../getting_started/configuration.md#map-ldap-groups-to-shield-groups)
+to grant existing [Shield groups](https://shield.codeigniter.com/latest/references/authorization/)
+to eligible users during LDAP password sign-in. The mapping applies to both
+provisioned users and existing linked users, including when `updateProfile`
+is disabled.
+
+Assignments are additive and persist in Shield. If someone leaves an LDAP
+group, remove their corresponding Shield assignment separately to revoke it.
+An existing Shield group assignment also survives removal of its LDAP mapping.
 
 ## Account Disabling and Password Recovery
 

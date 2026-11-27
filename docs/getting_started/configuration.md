@@ -173,6 +173,31 @@ needs permission to search each selected base. The native transport checks for
 a single match across the selected bases before it verifies the password. See the
 [configuration reference](../references/configuration.md#login-and-eligibility-filters).
 
+## Map LDAP Groups to Shield Groups
+
+Set `groupMappings` on each connection that should grant Shield groups. Use a
+key from `Config\AuthGroups::$groups` on the left and the full DN of an LDAP
+group entry on the right.
+
+```php
+'groupMappings' => [
+    'user'      => 'CN=Users Group,OU=Groups,DC=example,DC=com',
+    'developer' => 'CN=Developers,OU=Groups,DC=example,DC=com',
+],
+```
+
+For OpenLDAP, a group DN might be `cn=shield-users,ou=groups,dc=example,dc=org`.
+An organizational unit such as `OU=Users,DC=example,DC=com` is a container. Use
+the DN of the group entry that lists its members.
+
+The service account needs permission to search each mapped group by its
+membership attribute. The native directory checks direct `member` membership
+for Active Directory `group` and OpenLDAP `groupOfNames` entries, and direct
+`uniqueMember` membership for `groupOfUniqueNames`. Active Directory primary
+groups and membership inherited through nested groups are outside this lookup.
+See [Group assignments](../guides/user_management.md#authorization) for how
+assignments are stored.
+
 ## Environment Overrides
 
 Keep **.env** outside version control. When a deployment environment requires
