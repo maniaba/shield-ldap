@@ -45,7 +45,8 @@ php spark shield:ldap-link corporate --all --apply
 
 Bulk mode checks for duplicate local usernames and multiple Shield users
 matching the same LDAP object before any writes. It looks up each candidate
-again before saving a link and reports linked, skipped, and conflicting
+again before saving a link to check that its username still resolves to the
+same directory identity. The summary reports linked, skipped, and conflicting
 accounts. Conflicts cause a nonzero exit status. An unexpected directory error
 stops the run. Each completed link is saved independently, so run another
 preview before retrying.
@@ -81,7 +82,7 @@ php spark shield:ldap-sync corporate --apply
 
 | Connection option | Effect |
 | --- | --- |
-| `provisionUsers` | Set to `true` to create Shield accounts for eligible directory entries with no existing link. |
+| `provisionUsers` | Set to `true` to create Shield accounts for eligible directory entries with no existing link. New users receive Shield’s configured default group. |
 | `updateProfile` | Set to `true` to apply mappings to existing linked accounts. Mappings also apply when creating accounts. |
 | `profileAttributes` | Maps writable Shield fields to LDAP attributes. Map `username` when provisioning users. |
 
@@ -90,14 +91,28 @@ skips reserved local accounts. If an existing Shield username conflicts with
 a new directory account, verify both accounts and create the link first.
 [Link Existing Users](#link-existing-users)
 
-The command requires a complete directory scan before applying changes. It
-reports `would_create` and `would_update` in a preview and `created` and
-`updated` when applying changes. The summary includes unchanged and skipped
-accounts and conflicts. Conflicts cause a nonzero exit status.
+The native transport requires the directory to honor the critical LDAP paged
+results control. The command requests 100 entries per page and reports
+`scan_limit_exceeded` if it needs more than 10,000 pages across the configured
+bases. An incomplete scan stops before the command writes any users.
+
+The preview shows the changes planned against the current Shield data. Apply
+checks that data again before writing each user, so a later run can report
+different results. The command reports `would_create` and `would_update` in a
+preview and `created` and `updated` when applying changes. The summary includes
+unchanged and skipped accounts and conflicts. Conflicts cause a nonzero exit
+status.
 
 Each user's changes are committed in a separate transaction. If a run is
 interrupted, rerun the command from the beginning. Existing links identify
-users already processed. Synchronization applies to entries in the scan.
+users already processed. Deleted or disabled directory accounts keep their
+current local status. Review and update their Shield access through your
+application’s offboarding process.
+
+The command stages mapped profile values in memory up to PHP’s
+`php://temp` threshold of 2 MiB. Larger scans can spill into PHP’s system
+temporary directory. Use a restricted temporary directory on the host when
+processing sensitive profile attributes.
 
 ## Command Help
 

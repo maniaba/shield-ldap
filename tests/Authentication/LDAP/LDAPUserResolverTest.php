@@ -16,6 +16,7 @@ namespace Maniaba\ShieldLDAP\Tests\Authentication\LDAP;
 use CodeIgniter\Config\Factories;
 use CodeIgniter\Shield\Authentication\Actions\EmailActivator;
 use CodeIgniter\Shield\Config\Auth;
+use CodeIgniter\Shield\Config\AuthGroups;
 use CodeIgniter\Shield\Entities\User;
 use CodeIgniter\Shield\Entities\UserIdentity;
 use CodeIgniter\Shield\Models\UserIdentityModel;
@@ -23,8 +24,13 @@ use CodeIgniter\Shield\Models\UserModel;
 use Config\Database;
 use Config\Services;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPConnection;
+use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPLinkService;
+use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPProfileSynchronizer;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;
+use Maniaba\ShieldLDAP\Authentication\LDAP\LinkStatus;
+use Maniaba\ShieldLDAP\Authentication\LDAP\SyncStatus;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
+use Maniaba\ShieldLDAP\Exceptions\LDAPReason;
 use Maniaba\ShieldLDAP\Tests\DatabaseTestCase;
 use RuntimeException;
 
@@ -37,14 +43,16 @@ final class LDAPUserResolverTest extends DatabaseTestCase
 
     public function testProvisioningStoresOnlyTheStableDirectoryIdentity(): void
     {
-        $users    = model(UserModel::class);
-        $resolver = new LDAPUserResolver($users);
+        $users                                  = model(UserModel::class);
+        $resolver                               = new LDAPUserResolver($users);
+        config(AuthGroups::class)->defaultGroup = 'beta';
 
         $user = $resolver->resolve('corporate', 'immutable-object', ['username' => 'DirUser'], true);
 
         $this->assertSame('diruser', $user->username);
         $this->assertNull($user->email);
         $this->assertNull($user->password_hash);
+        $this->assertSame(['beta'], $user->getGroups());
 
         $this->seeInDatabase($this->tables['identities'], [
             'user_id' => $user->id,
@@ -160,18 +168,23 @@ final class LDAPUserResolverTest extends DatabaseTestCase
 
     public function testSynchronizationPreviewAndApplyProvisionTheSameStableIdentity(): void
     {
-        $resolver   = new LDAPUserResolver(model(UserModel::class));
+        $users      = model(UserModel::class);
+        $profiles   = new LDAPProfileSynchronizer($users);
+        $resolver   = new LDAPUserResolver($users);
         $connection = $this->syncConnection();
         $profile    = ['username' => 'Directory.User'];
+        $plan       = $profiles->plan($connection, 'immutable-id', $profile, []);
 
-        $this->assertSame('create', $resolver->synchronize($connection, 'immutable-id', $profile, [], false));
+        $this->assertSame(SyncStatus::Create, $plan->status);
         $this->dontSeeInDatabase($this->tables['users'], ['username' => 'directory.user']);
         $this->dontSeeInDatabase($this->tables['identities'], ['type' => LDAPUserResolver::ID_TYPE]);
 
-        $this->assertSame('create', $resolver->synchronize($connection, 'immutable-id', $profile, [], true));
+        $this->assertSame(SyncStatus::Create, $profiles->apply($plan));
         $user = $resolver->resolve('corporate', 'immutable-id');
         $this->assertSame('directory.user', $user->username);
         $this->assertNull($user->password_hash);
+        $this->assertSame(['user'], $user->getGroups());
+        $this->assertSame(SyncStatus::Unchanged, $profiles->apply($plan));
         $this->assertSame('unchanged', $resolver->synchronize($connection, 'immutable-id', $profile, [], true));
         $this->seeNumRecords(1, $this->tables['identities'], ['user_id' => $user->id, 'type' => LDAPUserResolver::ID_TYPE]);
     }
@@ -227,6 +240,19 @@ final class LDAPUserResolverTest extends DatabaseTestCase
         $this->assertSame('local', $resolver->resolve('corporate', 'local-id')->username);
         $this->assertSame($regular->username, $resolver->resolve('corporate', 'regular-id')->username);
         $this->dontSeeInDatabase($this->tables['users'], ['username' => 'emergency']);
+    }
+
+    public function testDirectoryResolutionRejectsTheReservedLocalUserEvenWithoutProfileUpdates(): void
+    {
+        $resolver = new LDAPUserResolver(model(UserModel::class));
+        $local    = $resolver->resolve('corporate', 'local-id', ['username' => 'local'], true);
+
+        try {
+            $resolver->resolve('corporate', 'local-id', updateProfile: false, localAccounts: ['operator' => $local->id]);
+            $this->fail('LDAP resolution accepted a reserved local user.');
+        } catch (LDAPException $exception) {
+            $this->assertSame(LDAPReason::ReservedLocalAccount, $exception->kind);
+        }
     }
 
     public function testSynchronizationLeavesBannedAndInactiveUsersUnchanged(): void
@@ -308,6 +334,18 @@ final class LDAPUserResolverTest extends DatabaseTestCase
 
         $this->assertSame('already_linked', $resolver->inspectLink($user, 'corporate', 'old-id'));
         $this->assertSame('stale_link', $resolver->inspectLink($user, 'corporate', 'new-id'));
+    }
+
+    public function testLinkServiceMatchesAnExpectedUsernameWithoutCaseSensitivity(): void
+    {
+        $users = model(UserModel::class);
+        $links = new LDAPLinkService($users);
+        $id    = $users->insert(['username' => 'DirectoryUser']);
+        $user  = $links->link('corporate', 'old-id', $id, 'directoryuser');
+
+        $this->assertSame(LinkStatus::AlreadyLinked, $links->inspectLink($user, 'corporate', 'old-id'));
+        $this->assertTrue($links->replaceLink('corporate', 'new-id', $id, 'DIRECTORYUSER'));
+        $this->assertSame(LinkStatus::AlreadyLinked, $links->inspectLink($user, 'corporate', 'new-id'));
     }
 
     public function testReplaceLinkUpdatesOnlyTheSelectedIdentityAndIsIdempotent(): void
@@ -461,8 +499,9 @@ final class LDAPUserResolverTest extends DatabaseTestCase
 
     public function testProvisioningRollsBackWhenIdentityCannotBeStored(): void
     {
+        $failure    = new RuntimeException('private data');
         $identities = $this->getMockBuilder(UserIdentityModel::class)->onlyMethods(['create'])->getMock();
-        $identities->expects($this->once())->method('create')->willThrowException(new RuntimeException('private data'));
+        $identities->expects($this->once())->method('create')->willThrowException($failure);
         $resolver = new LDAPUserResolver(model(UserModel::class), $identities);
 
         try {
@@ -470,11 +509,30 @@ final class LDAPUserResolverTest extends DatabaseTestCase
             $this->fail('Provisioning succeeded without recording an identity.');
         } catch (LDAPException $exception) {
             $this->assertSame('synchronization_conflict', $exception->reason);
-            $this->assertNull($exception->getPrevious());
+            $this->assertSame($failure, $exception->getPrevious());
             $this->assertStringNotContainsString('private data', $exception->getMessage());
         }
 
         $this->dontSeeInDatabase($this->tables['users'], ['username' => 'rolledback']);
+    }
+
+    public function testProvisioningRollsBackWhenDefaultGroupCannotBeAssigned(): void
+    {
+        $failure = new RuntimeException('Group assignment failed.');
+        $users   = $this->getMockBuilder(UserModel::class)->onlyMethods(['addToDefaultGroup'])->getMock();
+        $users->expects($this->once())->method('addToDefaultGroup')->willThrowException($failure);
+        $resolver = new LDAPUserResolver($users);
+
+        try {
+            $resolver->resolve('corporate', 'immutable-object', ['username' => 'rolledback'], true);
+            $this->fail('Provisioning succeeded without assigning the default group.');
+        } catch (LDAPException $exception) {
+            $this->assertSame(LDAPReason::SynchronizationConflict, $exception->kind);
+            $this->assertSame($failure, $exception->getPrevious());
+        }
+
+        $this->dontSeeInDatabase($this->tables['users'], ['username' => 'rolledback']);
+        $this->dontSeeInDatabase($this->tables['identities'], ['type' => LDAPUserResolver::ID_TYPE]);
     }
 
     public function testFailedDirectoryWriteDoesNotPoisonTheSharedConnection(): void

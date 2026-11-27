@@ -15,6 +15,7 @@ namespace Maniaba\ShieldLDAP\Authentication\LDAP;
 
 use LDAP\Connection;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
+use Maniaba\ShieldLDAP\Exceptions\LDAPReason;
 use SensitiveParameter;
 
 /**
@@ -75,7 +76,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
         string $eligibilityFilter = '(objectClass=*)',
     ): array {
         if ($password === '' || str_contains($password, "\0")) {
-            throw new LDAPException('invalid_credentials');
+            throw new LDAPException(LDAPReason::InvalidCredentials);
         }
 
         $attributes[] = $connection->externalIdAttribute;
@@ -109,7 +110,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
         string $eligibilityFilter = '(objectClass=*)',
     ): array {
         if (! $connection->verifyCertificate) {
-            throw new LDAPException('tls_verification_required');
+            throw new LDAPException(LDAPReason::TlsVerificationRequired);
         }
 
         $attributes = [$connection->externalIdAttribute];
@@ -131,48 +132,30 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
     /**
      * {@inheritDoc}
      */
-    public function scanUsers(LDAPConnection $connection, int $pageSize = 100): iterable
+    public function scanUsers(LDAPConnection $connection, int $pageSize = 100): LDAPUserScan
     {
-        if (! $connection->verifyCertificate) {
-            throw new LDAPException('tls_verification_required');
-        }
-
-        if ($pageSize < 1 || $pageSize > self::MAX_SCAN_PAGE_SIZE) {
-            throw new LDAPException('invalid_search_limit');
-        }
-
-        if (extension_loaded('ldap') && ! defined('LDAP_CONTROL_PAGEDRESULTS')) {
-            throw new LDAPException('unsupported_ldap_client');
-        }
-
-        $baseDn     = $connection->userBaseDn ?? $connection->baseDn;
-        $filter     = LDAPFilter::all($connection->loginFilter, $connection->eligibilityFilter);
-        $attributes = array_values(array_unique([$connection->externalIdAttribute, ...array_values($connection->profileAttributes)]));
-        $this->validateSearch($baseDn, $filter, $attributes);
-
-        $ldap = $this->open($connection, true);
-
-        try {
-            $pagesRemaining = self::MAX_SCAN_PAGES;
-
-            foreach ((array) $baseDn as $base) {
-                $cookie = '';
-
-                do {
-                    if ($pagesRemaining === 0) {
-                        throw new LDAPException('incomplete_search');
-                    }
-
-                    $pagesRemaining--;
-
-                    foreach ($this->search($ldap, $connection, $base, $filter, $attributes, $pageSize, pageCookie: $cookie) as $entry) {
-                        yield $entry;
-                    }
-                } while ($cookie !== '');
+        return new LDAPUserScan(function () use ($connection, $pageSize): array {
+            if (! $connection->verifyCertificate) {
+                throw new LDAPException(LDAPReason::TlsVerificationRequired);
             }
-        } finally {
-            ldap_unbind($ldap);
-        }
+
+            if ($pageSize < 1 || $pageSize > self::MAX_SCAN_PAGE_SIZE) {
+                throw new LDAPException(LDAPReason::InvalidSearchLimit);
+            }
+
+            if (extension_loaded('ldap') && ! defined('LDAP_CONTROL_PAGEDRESULTS')) {
+                throw new LDAPException(LDAPReason::UnsupportedLdapClient);
+            }
+
+            $baseDn     = $connection->userBaseDn ?? $connection->baseDn;
+            $filter     = LDAPFilter::all($connection->loginFilter, $connection->eligibilityFilter);
+            $attributes = array_values(array_unique([$connection->externalIdAttribute, ...array_values($connection->profileAttributes)]));
+            $this->validateSearch($baseDn, $filter, $attributes);
+
+            $ldap = $this->open($connection, true);
+
+            return [$ldap, $this->scanEntries($ldap, $connection, $baseDn, $filter, $attributes, $pageSize)];
+        });
     }
 
     /**
@@ -188,7 +171,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
         int $limit = 20,
     ): array {
         if ($limit < 1 || $limit > 100) {
-            throw new LDAPException('invalid_search_limit');
+            throw new LDAPException(LDAPReason::InvalidSearchLimit);
         }
 
         $this->validateSearch($baseDn, $filter, $attributes);
@@ -208,30 +191,30 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
     private function open(LDAPConnection $connection, bool $serviceBind): Connection
     {
         if (! extension_loaded('ldap')) {
-            throw new LDAPException('extension_unavailable');
+            throw new LDAPException(LDAPReason::ExtensionUnavailable);
         }
 
         if (! defined('LDAP_OPT_NETWORK_TIMEOUT') || ! defined('LDAP_OPT_TIMEOUT')
                                                   || ! defined('LDAP_OPT_X_TLS_REQUIRE_CERT') || ! defined('LDAP_OPT_X_TLS_DEMAND')
                                                   || ! defined('LDAP_OPT_X_TLS_HARD') || ! function_exists('ldap_start_tls')
         ) {
-            throw new LDAPException('unsupported_ldap_client');
+            throw new LDAPException(LDAPReason::UnsupportedLdapClient);
         }
 
-        $failure = new LDAPException('directory_unavailable');
+        $failure = new LDAPException(LDAPReason::DirectoryUnavailable);
 
         foreach ($connection->hosts as $host) {
             $ldap = @ldap_connect($connection->endpoint($host));
 
             if ($ldap === false) {
-                throw new LDAPException('tls_context_failed');
+                throw new LDAPException(LDAPReason::TlsContextFailed);
             }
 
             try {
                 $this->configure($ldap, $connection);
 
                 if ($connection->encryption === 'starttls' && ! @ldap_start_tls($ldap)) {
-                    throw new LDAPException($this->transportFailure($ldap, ldap_errno($ldap)) ?? 'tls_failed');
+                    throw new LDAPException($this->transportFailure($ldap, ldap_errno($ldap)) ?? LDAPReason::TlsFailed);
                 }
 
                 if ($serviceBind) {
@@ -245,7 +228,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
             } catch (LDAPException $exception) {
                 ldap_unbind($ldap);
 
-                if (! in_array($exception->reason, ['directory_unavailable', 'connection_timeout', 'search_timeout'], true)) {
+                if ($exception->kind?->isRetryableEndpointFailure() !== true) {
                     throw $exception;
                 }
 
@@ -266,7 +249,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
             || ! ldap_set_option($ldap, LDAP_OPT_NETWORK_TIMEOUT, $connection->connectTimeout)
             || ! ldap_set_option($ldap, LDAP_OPT_TIMEOUT, $connection->searchTimeout)
         ) {
-            throw new LDAPException('connection_configuration_failed');
+            throw new LDAPException(LDAPReason::ConnectionConfigurationFailed);
         }
     }
 
@@ -276,7 +259,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
             if (! ldap_get_option($ldap, LDAP_OPT_X_TLS_REQUIRE_CERT, $requireCert)
                 || ! in_array($requireCert, [LDAP_OPT_X_TLS_DEMAND, LDAP_OPT_X_TLS_HARD], true)
             ) {
-                throw new LDAPException('tls_verification_required');
+                throw new LDAPException(LDAPReason::TlsVerificationRequired);
             }
 
             return;
@@ -287,11 +270,11 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
         if ($connection->encryption !== 'starttls' || ! defined('LDAP_OPT_X_TLS_NEVER')
                                                    || PHP_VERSION_ID < 80322 || (PHP_VERSION_ID >= 80400 && PHP_VERSION_ID < 80408)
         ) {
-            throw new LDAPException('tls_verification_override_unsupported');
+            throw new LDAPException(LDAPReason::TlsVerificationOverrideUnsupported);
         }
 
         if (! @ldap_set_option($ldap, LDAP_OPT_X_TLS_REQUIRE_CERT, LDAP_OPT_X_TLS_NEVER)) {
-            throw new LDAPException('tls_context_failed');
+            throw new LDAPException(LDAPReason::TlsContextFailed);
         }
     }
 
@@ -307,8 +290,8 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
 
         throw new LDAPException($this->transportFailure($ldap, $code)
             ?? (! $serviceAccount && $code === self::INVALID_CREDENTIALS
-                ? 'invalid_credentials'
-                : ($serviceAccount ? 'service_bind_failed' : 'user_bind_failed')));
+                ? LDAPReason::InvalidCredentials
+                : ($serviceAccount ? LDAPReason::ServiceBindFailed : LDAPReason::UserBindFailed)));
     }
 
     /**
@@ -319,7 +302,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
         $ids = $entry['attributes'][strtolower($connection->externalIdAttribute)] ?? [];
 
         if (count($ids) !== 1 || $ids[0] === '') {
-            throw new LDAPException('invalid_external_identity');
+            throw new LDAPException(LDAPReason::InvalidExternalIdentity);
         }
 
         return LDAPFilter::all($filter, $eligibilityFilter, LDAPFilter::equal($connection->externalIdAttribute, $ids[0]));
@@ -337,10 +320,43 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
         $verified    = $this->findExactlyOne($ldap, $connection, $entry['dn'], $filter, $attributes, true);
 
         if (($verified['attributes'][$idAttribute] ?? []) !== $entry['attributes'][$idAttribute]) {
-            throw new LDAPException('directory_identity_changed');
+            throw new LDAPException(LDAPReason::DirectoryIdentityChanged);
         }
 
         return $verified;
+    }
+
+    /**
+     * @param list<string>|string $baseDn
+     * @param list<string>        $attributes
+     *
+     * @return iterable<int, DirectoryEntry>
+     */
+    private function scanEntries(
+        Connection $ldap,
+        LDAPConnection $connection,
+        array|string $baseDn,
+        string $filter,
+        array $attributes,
+        int $pageSize,
+    ): iterable {
+        $pagesRemaining = self::MAX_SCAN_PAGES;
+
+        foreach ((array) $baseDn as $base) {
+            $cookie = '';
+
+            do {
+                if ($pagesRemaining === 0) {
+                    throw new LDAPException(LDAPReason::ScanLimitExceeded);
+                }
+
+                $pagesRemaining--;
+
+                foreach ($this->search($ldap, $connection, $base, $filter, $attributes, $pageSize, pageCookie: $cookie) as $entry) {
+                    yield $entry;
+                }
+            } while ($cookie !== '');
+        }
     }
 
     /**
@@ -373,14 +389,14 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
                 $match['dn'] !== $entry['dn']
                 || ($match['attributes'][$idAttribute] ?? []) !== ($entry['attributes'][$idAttribute] ?? [])
             ))) {
-                throw new LDAPException('ambiguous_user');
+                throw new LDAPException(LDAPReason::AmbiguousUser);
             }
 
             $match = $entry;
         }
 
         if ($match === null) {
-            throw new LDAPException($baseOnly ? 'ineligible_user' : 'user_not_found');
+            throw new LDAPException($baseOnly ? LDAPReason::IneligibleUser : LDAPReason::UserNotFound);
         }
 
         return $match;
@@ -426,7 +442,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
             : @ldap_parse_result($ldap, $result, $code);
 
         if (! $parsed || ldap_first_reference($ldap, $result) !== false || ($paged && $referrals !== [])) {
-            throw new LDAPException('incomplete_search');
+            throw new LDAPException(LDAPReason::IncompleteSearch);
         }
 
         // Only accept the client-side size boundary when we actually received
@@ -440,7 +456,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
         if ($paged) {
             $cookie = $responseControls[LDAP_CONTROL_PAGEDRESULTS]['value']['cookie'] ?? null;
             if (! is_string($cookie) || ldap_count_entries($ldap, $result) > $limit) {
-                throw new LDAPException('incomplete_search');
+                throw new LDAPException(LDAPReason::IncompleteSearch);
             }
 
             $pageCookie = $cookie;
@@ -452,7 +468,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
             $dn = ldap_get_dn($ldap, $row);
 
             if ($dn === false || ($dn === '' && $baseDn !== '') || str_contains($dn, "\0")) {
-                throw new LDAPException('invalid_directory_entry');
+                throw new LDAPException(LDAPReason::InvalidDirectoryEntry);
             }
 
             $values = [];
@@ -479,7 +495,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
     private function validateSearch(array|string $baseDn, string $filter, array $attributes): void
     {
         if (! LDAPConnection::isValidBaseDn($baseDn) || count($attributes) > 64) {
-            throw new LDAPException('invalid_search');
+            throw new LDAPException(LDAPReason::InvalidSearch);
         }
 
         LDAPFilter::validate($filter);
@@ -489,7 +505,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
         }
     }
 
-    private function transportFailure(Connection $ldap, int $code): ?string
+    private function transportFailure(Connection $ldap, int $code): ?LDAPReason
     {
         // These OpenLDAP errors also cover TLS validation failures. Recognize
         // known certificate diagnostics without exposing the native message.
@@ -502,23 +518,23 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
                 || str_starts_with($diagnostic, 'TLS: peer cert untrusted')
                 || str_contains($diagnostic, 'certificate verify failed'))
         ) {
-            return 'certificate_verification_failed';
+            return LDAPReason::CertificateVerificationFailed;
         }
 
         return match ($code) {
-            self::TIMEOUT                                             => 'connection_timeout',
-            self::SERVER_DOWN, self::CONNECT_ERROR, self::UNAVAILABLE => 'directory_unavailable',
+            self::TIMEOUT                                             => LDAPReason::ConnectionTimeout,
+            self::SERVER_DOWN, self::CONNECT_ERROR, self::UNAVAILABLE => LDAPReason::DirectoryUnavailable,
             default                                                   => null,
         };
     }
 
-    private function searchFailure(Connection $ldap, int $code): string
+    private function searchFailure(Connection $ldap, int $code): LDAPReason
     {
         return match ($code) {
-            self::TIMEOUT, self::TIME_LIMIT_EXCEEDED                     => 'search_timeout',
-            self::SIZE_LIMIT_EXCEEDED, self::ADMIN_LIMIT, self::REFERRAL => 'incomplete_search',
-            self::FILTER_ERROR                                           => 'invalid_filter',
-            default                                                      => $this->transportFailure($ldap, $code) ?? 'search_failed',
+            self::TIMEOUT, self::TIME_LIMIT_EXCEEDED                     => LDAPReason::SearchTimeout,
+            self::SIZE_LIMIT_EXCEEDED, self::ADMIN_LIMIT, self::REFERRAL => LDAPReason::IncompleteSearch,
+            self::FILTER_ERROR                                           => LDAPReason::InvalidFilter,
+            default                                                      => $this->transportFailure($ldap, $code) ?? LDAPReason::SearchFailed,
         };
     }
 }

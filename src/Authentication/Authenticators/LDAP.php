@@ -26,6 +26,7 @@ use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;
 use Maniaba\ShieldLDAP\Authentication\LDAP\MultiBaseLDAPDirectoryInterface;
 use Maniaba\ShieldLDAP\Config\AuthLDAP;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
+use Maniaba\ShieldLDAP\Exceptions\LDAPReason;
 
 /**
  * Uses verified LDAP identities with Shield's session and login action lifecycle.
@@ -56,11 +57,11 @@ class LDAP extends Session
 
         $this->ldapConfig    = $config ?? config('AuthLDAP');
         $this->directory     = $directory ?? service('ldapDirectory');
-        $this->resolver      = $resolver ?? new LDAPUserResolver($provider);
+        $this->resolver      = $resolver ?? service('ldapUserResolver', $provider);
         $this->localAccounts = array_change_key_case($this->ldapConfig->localAccounts);
 
         if (count($this->localAccounts) !== count($this->ldapConfig->localAccounts)) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
     }
 
@@ -189,7 +190,7 @@ class LDAP extends Session
         $connection   = $this->ldapConfig->getConnection($connectionId);
 
         if ($connection->id !== $connectionId) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
         $predicates = [];
@@ -202,7 +203,7 @@ class LDAP extends Session
         $directory = $this->directory;
 
         if (is_array($baseDn) && ! $directory instanceof MultiBaseLDAPDirectoryInterface) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
         $filter = LDAPFilter::all($connection->loginFilter, LDAPFilter::any(...$predicates));
@@ -221,6 +222,7 @@ class LDAP extends Session
             LDAPUserResolver::profile($connection, $entry['attributes']),
             $connection->provisionUsers,
             $connection->updateProfile,
+            $this->localAccounts,
         );
     }
 

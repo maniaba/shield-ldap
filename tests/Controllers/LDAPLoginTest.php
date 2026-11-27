@@ -308,6 +308,20 @@ final class LDAPLoginTest extends DatabaseTestCase
         $this->assertFalse(auth('session')->loggedIn());
     }
 
+    public function testReservedLocalAccountCannotUseAnExistingDirectoryLinkToSignIn(): void
+    {
+        $this->ldap->localAccounts[$this->user->username] = $this->user->id;
+        $resolver                                         = new LDAPUserResolver(auth()->getProvider());
+        $resolver->link('example', 'stable-id', $this->user->id);
+        $this->directory->expects($this->once())->method('authenticate')->willReturn($this->entry());
+
+        $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
+
+        $response->assertSessionHas('error', lang('Auth.badAttempt'));
+        $this->assertFalse(auth('session')->loggedIn());
+        $this->assertSame($this->user->username, $resolver->resolve('example', 'stable-id')->username);
+    }
+
     public function testReservedUsernameWithNoMatchingLocalAccountFailsClosed(): void
     {
         $this->ldap->localAccounts['missing-operator'] = $this->user->id + 1000;
