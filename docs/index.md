@@ -4,6 +4,10 @@ Shield LDAP adds LDAPv3 and Active Directory sign-in to applications using
 CodeIgniter Shield. The authenticator verifies directory credentials over LDAPS
 or StartTLS and completes sign-in through Shield's session and login actions.
 
+Run `composer show maniaba/shield-ldap` in your application to find its installed
+version. Use the version selector in the header to find the guide for that release.
+Select **Development** if you installed `dev-main`.
+
 ## Getting Started
 
 1. [Install the package](getting_started/install.md) in an application with Shield configured.

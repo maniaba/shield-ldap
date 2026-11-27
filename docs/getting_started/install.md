@@ -26,8 +26,10 @@ Shield LDAP uses the existing Shield user, identity, and login tables.
 
 ## Composer Installation
 
-Once the first stable release is available on Packagist, run this command from
-your application's root directory.
+### Stable Release
+
+Install a stable release from [Packagist](https://packagist.org/packages/maniaba/shield-ldap)
+once one is available. Run Composer from your application's root directory.
 
 ```console
 composer require maniaba/shield-ldap
@@ -39,6 +41,16 @@ constraint when installing the package.
 ```console
 composer require 'codeigniter4/shield:~1.4.1' maniaba/shield-ldap
 ```
+
+### Development Branch
+
+To install the development branch from Packagist, require its version explicitly.
+
+```console
+composer require maniaba/shield-ldap:dev-main
+```
+
+Select **Development** in the guide's version selector when using this branch.
 
 Composer resolves the package against the version constraints in your application.
 If a Shield constraint blocks installation, run `composer why codeigniter4/shield`
