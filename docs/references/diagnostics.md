@@ -43,15 +43,16 @@ interpret connection and sign-in failures.
 ## Preview Directory Entries
 
 The following example requests display names from a configured Active
-Directory user search. Use a trusted group search base and group filter with
-the same method to inspect group entries.
+Directory user search. `preview()` accepts one trusted base DN per call. To
+compare multiple bases, make a separate call for each one. Use a trusted group
+search base and group filter with the same method to inspect group entries.
 
 ```php
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPFilter;
 
 $entries = $directory->preview(
     $connection,
-    $connection->userBaseDn ?? $connection->baseDn,
+    'OU=Employees,DC=example,DC=com',
     LDAPFilter::all($connection->loginFilter, $connection->eligibilityFilter),
     ['sAMAccountName', 'displayName'],
     20,
@@ -76,8 +77,15 @@ request.
 
 ```php
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPFilter;
+use Maniaba\ShieldLDAP\Authentication\LDAP\MultiBaseLDAPDirectoryInterface;
+use Maniaba\ShieldLDAP\Exceptions\LDAPException;
 
+$baseDn  = $connection->userBaseDn ?? $connection->baseDn;
 $matches = [];
+
+if (is_array($baseDn) && ! $directory instanceof MultiBaseLDAPDirectoryInterface) {
+    throw new LDAPException('invalid_configuration');
+}
 
 foreach ($connection->loginAttributes as $attribute) {
     $matches[] = LDAPFilter::equal($attribute, $identifier);
@@ -85,7 +93,7 @@ foreach ($connection->loginAttributes as $attribute) {
 
 $entry = $directory->authenticate(
     $connection,
-    $connection->userBaseDn ?? $connection->baseDn,
+    $baseDn,
     LDAPFilter::all($connection->loginFilter, LDAPFilter::any(...$matches)),
     [],
     $password,
@@ -126,6 +134,14 @@ To provide a different directory transport, implement
 `Maniaba\ShieldLDAP\Authentication\LDAP\LDAPDirectoryInterface` and declare
 a `ldapDirectory()` service in **app/Config/Services.php**. Follow the
 [CodeIgniter Services guide](https://codeigniter.com/user_guide/concepts/services.html).
+
+For configurations that use a list of search bases for sign-in, implement
+`Maniaba\ShieldLDAP\Authentication\LDAP\MultiBaseLDAPDirectoryInterface`.
+Its `authenticate()` method accepts a string or a list of base DNs and must
+confirm a single matching entry across all supplied bases before verifying the
+password. `LDAPDirectoryInterface` continues to support transports that use
+a single string base DN. Both interfaces keep `preview()` limited to one base
+per call.
 
 An implementation used for sign-in must verify the submitted password over
 a trusted encrypted connection, require one matching user, and recheck the

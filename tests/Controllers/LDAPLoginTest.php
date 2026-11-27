@@ -28,6 +28,7 @@ use Maniaba\ShieldLDAP\Authentication\Authenticators\LDAP;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPConnection;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPDirectoryInterface;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;
+use Maniaba\ShieldLDAP\Authentication\LDAP\MultiBaseLDAPDirectoryInterface;
 use Maniaba\ShieldLDAP\Config\AuthLDAP;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
 use Maniaba\ShieldLDAP\Tests\DatabaseTestCase;
@@ -85,7 +86,7 @@ final class LDAPLoginTest extends DatabaseTestCase
 
     public function testDirectoryLoginUsesShieldSessionAndDoesNotRememberPassword(): void
     {
-        $this->directory->expects($this->once())->method('authenticate')->willReturn($this->entry());
+        $this->directory->expects($this->once())->method('authenticate')->with($this->isInstanceOf(LDAPConnection::class), 'dc=example,dc=com')->willReturn($this->entry());
 
         $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret', 'remember' => '1']);
 
@@ -100,6 +101,44 @@ final class LDAPLoginTest extends DatabaseTestCase
         $this->seeInDatabase($this->tables['logins'], ['user_id' => $user->id, 'success' => 1]);
         $this->dontSeeInDatabase($this->tables['remember_tokens'], ['user_id' => $user->id]);
         $this->assertNull(session('_ci_old_input'));
+    }
+
+    public function testDirectoryLoginPassesConfiguredUserBaseDnsToASupportingDirectory(): void
+    {
+        $userBaseDns                                      = ['ou=employees,dc=example,dc=com', 'ou=contractors,dc=example,dc=com'];
+        $this->ldap->connections['example']['userBaseDn'] = $userBaseDns;
+        $directory                                        = $this->createMock(MultiBaseLDAPDirectoryInterface::class);
+        Services::injectMock('ldapDirectory', $directory);
+        $directory->expects($this->once())->method('authenticate')->with($this->isInstanceOf(LDAPConnection::class), $userBaseDns)->willReturn($this->entry());
+
+        $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
+
+        $response->assertSessionMissing('error');
+        $this->assertSame('directory-user', auth('session')->user()?->username);
+    }
+
+    public function testExplicitUserBaseDnTakesPrecedenceWithALegacyDirectory(): void
+    {
+        $userBaseDn                                       = 'ou=users,dc=example,dc=com';
+        $this->ldap->connections['example']['userBaseDn'] = $userBaseDn;
+        $this->directory->expects($this->once())->method('authenticate')->with($this->isInstanceOf(LDAPConnection::class), $userBaseDn)->willReturn($this->entry());
+
+        $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
+
+        $response->assertSessionMissing('error');
+        $this->assertSame('directory-user', auth('session')->user()?->username);
+    }
+
+    public function testLegacyDirectoryRejectsAUserBaseDnListWithoutSearching(): void
+    {
+        $this->ldap->connections['example']['userBaseDn'] = ['ou=employees,dc=example,dc=com', 'ou=contractors,dc=example,dc=com'];
+        $this->directory->expects($this->never())->method('authenticate');
+
+        $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
+
+        $response->assertSessionHas('error', lang('Auth.badAttempt'));
+        $this->assertFalse(auth('session')->loggedIn());
+        $this->assertLogged('debug', 'Shield LDAP login rejected (invalid_configuration).');
     }
 
     public function testRememberedDirectoryLoginUsesShieldTokenRotationAndLogout(): void

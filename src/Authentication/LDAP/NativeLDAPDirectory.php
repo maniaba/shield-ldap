@@ -22,7 +22,7 @@ use SensitiveParameter;
  *
  * @phpstan-type DirectoryEntry array{dn: string, attributes: array<string, list<string>>}
  */
-final class NativeLDAPDirectory implements LDAPDirectoryInterface
+final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface
 {
     private const TIME_LIMIT_EXCEEDED = 3;
     private const SIZE_LIMIT_EXCEEDED = 4;
@@ -65,7 +65,7 @@ final class NativeLDAPDirectory implements LDAPDirectoryInterface
      */
     public function authenticate(
         LDAPConnection $connection,
-        string $baseDn,
+        array|string $baseDn,
         string $filter,
         array $attributes,
         #[SensitiveParameter]
@@ -227,29 +227,46 @@ final class NativeLDAPDirectory implements LDAPDirectoryInterface
     }
 
     /**
-     * @param list<string> $attributes
+     * @param list<string>|string $baseDn
+     * @param list<string>        $attributes
      *
      * @return DirectoryEntry
      */
     private function findExactlyOne(
         Connection $ldap,
         LDAPConnection $connection,
-        string $baseDn,
+        array|string $baseDn,
         string $filter,
         array $attributes,
         bool $baseOnly = false,
     ): array {
-        $entries = $this->search($ldap, $connection, $baseDn, $filter, $attributes, 2, $baseOnly);
+        $match       = null;
+        $idAttribute = strtolower($connection->externalIdAttribute);
 
-        if ($entries === []) {
+        foreach ((array) $baseDn as $base) {
+            $entries = $this->search($ldap, $connection, $base, $filter, $attributes, 2, $baseOnly);
+
+            if ($entries === []) {
+                continue;
+            }
+
+            $entry = $entries[0];
+
+            if (count($entries) > 1 || ($match !== null && (
+                $match['dn'] !== $entry['dn']
+                || ($match['attributes'][$idAttribute] ?? []) !== ($entry['attributes'][$idAttribute] ?? [])
+            ))) {
+                throw new LDAPException('ambiguous_user');
+            }
+
+            $match = $entry;
+        }
+
+        if ($match === null) {
             throw new LDAPException($baseOnly ? 'ineligible_user' : 'user_not_found');
         }
 
-        if (count($entries) > 1) {
-            throw new LDAPException('ambiguous_user');
-        }
-
-        return $entries[0];
+        return $match;
     }
 
     /**
@@ -319,11 +336,12 @@ final class NativeLDAPDirectory implements LDAPDirectoryInterface
     }
 
     /**
-     * @param list<string> $attributes
+     * @param list<string>|string $baseDn
+     * @param list<string>        $attributes
      */
-    private function validateSearch(string $baseDn, string $filter, array $attributes): void
+    private function validateSearch(array|string $baseDn, string $filter, array $attributes): void
     {
-        if (trim($baseDn) === '' || str_contains($baseDn, "\0") || count($attributes) > 64) {
+        if (! LDAPConnection::isValidBaseDn($baseDn) || count($attributes) > 64) {
             throw new LDAPException('invalid_search');
         }
 

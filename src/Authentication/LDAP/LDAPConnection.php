@@ -29,9 +29,10 @@ final readonly class LDAPConnection
     /**
      * Validate the directory settings and bind credential.
      *
-     * @param array<int, string>    $hosts
-     * @param array<int, string>    $loginAttributes
-     * @param array<string, string> $profileAttributes Local user field to LDAP attribute
+     * @param array<int, string>       $hosts
+     * @param list<string>|string|null $userBaseDn
+     * @param array<int, string>       $loginAttributes
+     * @param array<string, string>    $profileAttributes Local user field to LDAP attribute
      *
      * @throws LDAPException If the connection settings are invalid.
      */
@@ -45,7 +46,7 @@ final readonly class LDAPConnection
         public ?int $port = null,
         public int $connectTimeout = 5,
         public int $searchTimeout = 5,
-        public ?string $userBaseDn = null,
+        public array|string|null $userBaseDn = null,
         public string $loginFilter = '(objectClass=person)',
         public array $loginAttributes = ['uid'],
         public string $externalIdAttribute = 'entryUUID',
@@ -76,10 +77,11 @@ final readonly class LDAPConnection
             }
         }
 
-        foreach ([$baseDn, $userBaseDn ?? $baseDn, $bindDn] as $dn) {
-            if (trim($dn) === '' || str_contains($dn, "\0")) {
-                throw new LDAPException('invalid_configuration');
-            }
+        if (! self::isValidBaseDn($baseDn)
+            || ! self::isValidBaseDn($bindDn)
+            || ($userBaseDn !== null && ! self::isValidBaseDn($userBaseDn))
+        ) {
+            throw new LDAPException('invalid_configuration');
         }
 
         if ($bindPassword === '' || str_contains($bindPassword, "\0")) {
@@ -95,6 +97,30 @@ final readonly class LDAPConnection
 
         // A closure keeps the secret out of JSON, var_export(), and serialization.
         $this->readBindPassword = static fn (): string => $bindPassword;
+    }
+
+    /**
+     * Check a single search base or a bounded list of search bases.
+     *
+     * @param array<array-key, mixed>|string $baseDn
+     *
+     * @internal
+     */
+    public static function isValidBaseDn(array|string $baseDn): bool
+    {
+        $bases = (array) $baseDn;
+
+        if ($bases === [] || count($bases) > 10 || ! array_is_list($bases)) {
+            return false;
+        }
+
+        foreach ($bases as $dn) {
+            if (! is_string($dn) || trim($dn) === '' || str_contains($dn, "\0")) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

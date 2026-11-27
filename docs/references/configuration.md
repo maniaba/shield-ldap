@@ -23,14 +23,14 @@ is called. Use `connectionIds()` to list configured IDs.
 | Option | Default | Description |
 | --- | --- | --- |
 | `hosts` | Required | Ordered list of 1 to 10 hostnames or IP addresses. Specify IPv6 addresses without brackets. |
-| `baseDn` | Required | Base DN of the directory naming context. |
+| `baseDn` | Required | Root DN of the directory as a string. |
 | `bindDn` | Required | DN of the read-only lookup account. |
 | `bindPassword` | Required | Nonempty service-account password. Use an [environment override](../getting_started/configuration.md#environment-overrides) or an [application-owned provider](diagnostics.md#custom-connection-providers). |
 | `encryption` | `'ldaps'` | Use `'ldaps'` or `'starttls'`. |
 | `port` | `null` | Integer from 1 to 65535. With `null`, LDAPS uses 636 and StartTLS uses 389. |
 | `connectTimeout` | `5` | Network connection timeout in seconds, from 1 to 60. |
 | `searchTimeout` | `5` | LDAP operation and search time limit in seconds, from 1 to 60. |
-| `userBaseDn` | `null` | Base DN for user lookups. With `null`, lookups use `baseDn`. |
+| `userBaseDn` | `null` | A single DN or an ordered list of 1 to 10 DNs for user lookups. With `null`, lookups use `baseDn`. See [Multiple Search Bases](../getting_started/configuration.md#multiple-search-bases). |
 | `loginFilter` | `'(objectClass=person)'` | Trusted LDAP filter for the initial user lookup. |
 | `loginAttributes` | `['uid']` | List of 1 to 10 LDAP attributes accepted as a login identifier. The directory evaluates equality using its schema rules. |
 | `externalIdAttribute` | `'entryUUID'` | Immutable, single-valued LDAP attribute used to link the Shield user. Use `objectGUID` for Active Directory. |
@@ -50,9 +50,12 @@ verification, and eligibility check stay on that endpoint. See
 ## Login and Eligibility Filters
 
 The initial lookup combines `loginFilter` with an OR of escaped equality tests
-for every entry in `loginAttributes`. The native transport requires exactly one
-entry, verifies the password, and checks the original lookup filter and
-`eligibilityFilter` against the same immutable directory identity.
+for every entry in `loginAttributes`. When multiple search bases are configured,
+the native transport identifies a single match across the bases on the same
+endpoint. If overlapping searches return the same DN and immutable ID, they
+count as one match. Distinct matches and incomplete searches prevent sign-in.
+The transport then verifies the password and checks the original lookup filter
+and `eligibilityFilter` against the same immutable directory identity.
 
 See [Login Eligibility](../guides/login_eligibility.md) for Active Directory
 and OpenLDAP examples, including disabled accounts and group membership.
