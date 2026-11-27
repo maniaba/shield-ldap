@@ -18,6 +18,7 @@ use CodeIgniter\Cookie\Cookie;
 use CodeIgniter\HTTP\IncomingRequest;
 use CodeIgniter\Shield\Authentication\Actions\Email2FA;
 use CodeIgniter\Shield\Authentication\Authenticators\Session;
+use CodeIgniter\Shield\Authentication\Passwords;
 use CodeIgniter\Shield\Entities\User;
 use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Shield\Models\UserModel;
@@ -272,6 +273,17 @@ final class LDAPLoginTest extends DatabaseTestCase
     {
         $this->ldap->localAccounts['missing-operator'] = $this->user->id + 1000;
         $this->directory->expects($this->never())->method('authenticate');
+
+        $authOptions = get_object_vars(config('Auth'));
+        $dummyHash   = $authOptions['dummyPasswordHash'] ?? null;
+        $passwords   = $this->createMock(Passwords::class);
+        $passwords->expects($this->never())->method('hash');
+        if ($dummyHash !== null) {
+            $passwords->expects($this->once())->method('verify')->with('local-password', $dummyHash)->willReturn(true);
+        } else {
+            $passwords->expects($this->never())->method('verify');
+        }
+        Services::injectMock('passwords', $passwords);
 
         $response = $this->post('/login', ['username' => 'missing-operator', 'password' => 'local-password']);
 
