@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block outdated %}
+  {% set latest_url = "../" ~ base_url ~ "/latest/" %}
+  {% if config.site_url.rstrip("/").endswith("/dev") %}
+    You're viewing the development version.
+    Some features may not be available in a stable release yet.
+    <a href="{{ latest_url }}"><strong>Go to the latest stable version.</strong></a>
+  {% else %}
+    You're not viewing the latest version.
+    <a href="{{ latest_url }}"><strong>Click here to go to latest.</strong></a>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  {% if config.site_url.rstrip("/").endswith("/dev") %}
+    <script>
+      // Before the first stable release, /latest/ serves a copy of /dev/.
+      const guidePath = new URL({{ base_url | tojson }}, window.location.href).pathname;
+      if (/\/dev\/?$/.test(guidePath)) {
+        document$.subscribe(() => {
+          const notice = document.querySelector('[data-md-component="outdated"]');
+          if (notice) notice.hidden = false;
+        });
+      }
+    </script>
+  {% endif %}
+{% endblock %}

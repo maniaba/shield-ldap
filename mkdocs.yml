@@ -5,8 +5,12 @@ repo_url: https://github.com/maniaba/shield-ldap
 edit_uri: edit/main/docs/
 strict: true
 
+exclude_docs: |
+  overrides/
+
 theme:
   name: material
+  custom_dir: docs/overrides
   icon:
     repo: fontawesome/brands/github
   font:
