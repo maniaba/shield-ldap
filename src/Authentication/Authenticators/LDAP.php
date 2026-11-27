@@ -112,6 +112,12 @@ class LDAP extends Session
             $user->touchIdentity($identity);
         }
 
+        // Match Session::attempt() by issuing the token before the login action completes.
+        if (! $local && $this->shouldRemember && setting('Auth.sessionConfig')['allowRemembering']) {
+            $this->rememberUser($user);
+            $this->remember(false);
+        }
+
         return $result;
     }
 

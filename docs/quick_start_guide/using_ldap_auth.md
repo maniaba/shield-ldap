@@ -149,10 +149,10 @@ session configuration. `rememberCookieName` sets the cookie name and
 checkbox choice to `remember()` and uses `withCookies()` to send Shield's
 cookie with the redirect.
 
-Shield's `Session::login()` issues the token when LDAP sign-in completes
-without a pending login action. Sign-ins that require a login action continue
-with a regular Shield session after the user completes the action. The
-`session` alias handles restoring and rotating remember-me tokens.
+Shield issues the token after verifying the directory credentials. If a login
+action is required, the redirect to the action carries the cookie. The current
+sign-in remains pending until the user completes the action. The `session`
+alias handles restoring and rotating remember-me tokens.
 [Account disabling and revocation](../guides/user_management.md#account-disabling-and-password-recovery)
 
 ## Test Sign-in

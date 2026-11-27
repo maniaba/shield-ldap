@@ -15,6 +15,7 @@ namespace Maniaba\ShieldLDAP\Tests\Controllers;
 
 use CodeIgniter\Config\Factories;
 use CodeIgniter\Cookie\Cookie;
+use CodeIgniter\HTTP\IncomingRequest;
 use CodeIgniter\Shield\Authentication\Actions\Email2FA;
 use CodeIgniter\Shield\Authentication\Authenticators\Session;
 use CodeIgniter\Shield\Entities\User;
@@ -163,7 +164,7 @@ final class LDAPLoginTest extends DatabaseTestCase
         $this->dontSeeInDatabase($this->tables['remember_tokens'], ['user_id' => auth('session')->id()]);
     }
 
-    public function testLinkedDirectoryAccountStillRequiresConfiguredLoginAction(): void
+    public function testRememberedDirectoryLoginStillRequiresConfiguredLoginAction(): void
     {
         config('Auth')->actions['login']                  = Email2FA::class;
         config('Auth')->sessionConfig['allowRemembering'] = true;
@@ -175,7 +176,9 @@ final class LDAPLoginTest extends DatabaseTestCase
         $response = $this->post('/login', ['username' => $this->user->username, 'password' => 'directory-secret', 'remember' => '1']);
 
         $response->assertStatus(302);
-        $response->assertCookieMissing('remember');
+        $response->assertCookie('remember');
+        $cookie = $response->response()->getCookie('remember');
+        $this->assertInstanceOf(Cookie::class, $cookie);
         $this->assertSame(site_url('auth/a/show'), $response->getRedirectUrl());
         $authenticator = auth('session')->getAuthenticator();
         $this->assertSame(Session::class, $authenticator::class);
@@ -187,10 +190,21 @@ final class LDAPLoginTest extends DatabaseTestCase
             'type'         => LDAP::ID_TYPE_EMAIL_PASSWORD,
             'last_used_at' => null,
         ]);
-        $this->dontSeeInDatabase($this->tables['remember_tokens'], ['user_id' => $this->user->id]);
+        $this->seeNumRecords(1, $this->tables['remember_tokens'], ['user_id' => $this->user->id]);
 
         $identity = model(UserIdentityModel::class)->getIdentityByType($this->user, Session::ID_TYPE_EMAIL_2FA);
         $this->assertNotNull($identity);
+
+        $this->resetAuthenticationServices();
+        session()->remove('user');
+        $request = $this->createMock(IncomingRequest::class);
+        $request->method('getCookie')->with('remember')->willReturn($cookie->getValue());
+        Services::injectMock('request', $request);
+
+        $authenticator = auth('session')->getAuthenticator();
+        $this->assertInstanceOf(Session::class, $authenticator);
+        $this->assertFalse($authenticator->loggedIn());
+        $this->assertTrue($authenticator->isPending());
 
         $this->resetAuthenticationServices();
         $invalid = $this->withSession(['user' => session('user')])
@@ -199,7 +213,7 @@ final class LDAPLoginTest extends DatabaseTestCase
         $invalid->assertStatus(200);
         $invalid->assertCookieMissing('remember');
         $this->assertFalse(auth('session')->loggedIn());
-        $this->dontSeeInDatabase($this->tables['remember_tokens'], ['user_id' => $this->user->id]);
+        $this->seeNumRecords(1, $this->tables['remember_tokens'], ['user_id' => $this->user->id]);
 
         $this->resetAuthenticationServices();
         $verified = $this->withSession(['user' => session('user')])
@@ -208,7 +222,7 @@ final class LDAPLoginTest extends DatabaseTestCase
         $verified->assertStatus(302);
         $verified->assertCookieMissing('remember');
         $this->assertSame($this->user->id, auth('session')->id());
-        $this->dontSeeInDatabase($this->tables['remember_tokens'], ['user_id' => $this->user->id]);
+        $this->seeNumRecords(1, $this->tables['remember_tokens'], ['user_id' => $this->user->id]);
     }
 
     public function testReservedLocalAccountRequiresConfiguredMfaWithoutQueryingDirectory(): void
