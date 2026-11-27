@@ -100,14 +100,16 @@ class LDAP extends Session
         }
 
         $this->recordAttempt($identifier, $user);
+        if (! $pending) {
+            parent::login($user);
+
+            return $result;
+        }
+
         $this->startLogin($user);
 
         if ($local && ($identity = $user->getEmailIdentity()) !== null) {
             $user->touchIdentity($identity);
-        }
-
-        if (! $pending) {
-            $this->completeLogin($user);
         }
 
         return $result;
