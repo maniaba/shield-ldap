@@ -839,7 +839,63 @@
   <span class="md-ellipsis">
     
   
-    Spark Commands
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/ldap-link/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Link Existing Users
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/ldap-sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Synchronize Users
   
 
     
@@ -1321,8 +1377,10 @@ groups and membership inherited through nested groups are outside this lookup.
 See <a href="../../guides/user_management/#authorization">Group assignments</a> for how
 assignments are stored.</p>
 <p>Set <code>groupMappings</code> to an empty array to revoke this connection's previous
-grants on each user's next LDAP sign-in. Omitting the option or setting it to
-<code>null</code> disables group management for that connection.</p>
+grants when group synchronization runs. Omitting the option or setting it to
+<code>null</code> disables group management for that connection. See
+<a href="../../commands/ldap-sync/#move-sign-in-updates-to-scheduled-commands">Move Sign-In Updates to Scheduled Commands</a>
+to control when group and profile updates run.</p>
 <h2 id="environment-overrides">Environment Overrides</h2>
 <p>Keep <strong>.env</strong> outside version control. When a deployment environment requires
 underscores in variable names, use keys such as

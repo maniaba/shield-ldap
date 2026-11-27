@@ -828,7 +828,63 @@
   <span class="md-ellipsis">
     
   
-    Spark Commands
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/ldap-link/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Link Existing Users
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/ldap-sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Synchronize Users
   
 
     
@@ -1165,12 +1221,12 @@ directory-only users. <a href="https://github.com/codeigniter4/shield/blob/devel
 <h2 id="synchronizing-users-from-ldap">Synchronizing Users from LDAP</h2>
 <p>Use <code>shield:ldap-sync</code> from a trusted administrative shell to preview and apply
 provisioning and mapped profile updates in bulk.
-<a href="../../commands/#synchronize-users">Spark Commands</a></p>
+<a href="../../commands/ldap-sync/">Synchronize Users</a></p>
 <h2 id="linking-an-existing-shield-user">Linking an Existing Shield User</h2>
 <p>During migration, start with provisioning disabled. You can keep LDAP web
 sign-in disabled while using <code>shield:ldap-link</code> to preview and link accounts by
 username from a trusted administrative shell.
-<a href="../../commands/#link-existing-users">Spark Commands</a></p>
+<a href="../../commands/ldap-link/">Link Existing Users</a></p>
 <h3 id="linking-from-application-code">Linking from Application Code</h3>
 <p>In an application workflow, verify the directory account and select the Shield
 user who owns it. Create the link using the verified external identifier and
@@ -1216,7 +1272,9 @@ to grant existing <a href="https://shield.codeigniter.com/latest/references/auth
 to eligible users during LDAP password sign-in. The mapping applies to both
 provisioned users and existing linked users, including when <code>updateProfile</code>
 is disabled.</p>
-<p>On the next successful LDAP password sign-in, the connection withdraws grants
+<p>To refresh groups and profiles independently of sign-in, see
+<a href="../../commands/ldap-sync/#move-sign-in-updates-to-scheduled-commands">Move Sign-In Updates to Scheduled Commands</a>.</p>
+<p>When group synchronization runs, the connection withdraws grants
 for groups the user has left or whose mappings were removed. If several
 connections have granted the same group, the assignment remains until each
 of those connections withdraws its grant on a subsequent sign-in.</p>

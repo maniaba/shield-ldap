@@ -696,7 +696,63 @@
   <span class="md-ellipsis">
     
   
-    Spark Commands
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/ldap-link/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Link Existing Users
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/ldap-sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Synchronize Users
   
 
     
@@ -1192,16 +1248,21 @@ per call.</p>
 a trusted encrypted connection, require one matching user, and recheck the
 same immutable identity against the eligibility filter. Return the entry DN
 and the requested attribute values using lowercase keys and lists of strings.
-For a connection with <code>groupMappings</code>, return a <code>matchedGroups</code> list of the
-Shield group keys whose LDAP membership you verified for that same user.
+For a connection with <code>syncGroupsOnLogin</code> enabled and a populated
+<code>groupMappings</code> array, return a <code>matchedGroups</code> list of the Shield group keys
+whose LDAP membership you verified for that same user.
 Return an empty list when no configured group matches.
 Throw <code>LDAPException</code> with a reason code instead of passing native exceptions
 or credentials to the application.</p>
+<p>To support <a href="../../commands/ldap-sync/#synchronize-only-groups">group-only synchronization</a>,
+implement <code>LDAPGroupEnumerationInterface</code>. Return eligible entries with their
+immutable IDs and a <code>matchedGroups</code> list, including entries with zero matches.
+Report incomplete enumeration or membership checks with <code>LDAPException</code>.</p>
 <p>For <code>shield:ldap-link</code>, provide
 <code>Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserLookupInterface</code>. The
 package's <code>ldapUserLookup()</code> service uses this capability on the configured
 directory. Applications can also override that service in
-<strong>app/Config/Services.php</strong>. <a href="../../commands/#link-existing-users">Link Existing Users</a></p>
+<strong>app/Config/Services.php</strong>. <a href="../../commands/ldap-link/">Link Existing Users</a></p>
 <p>To support <code>shield:ldap-sync</code>, implement
 <code>Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserEnumerationInterface</code>. Its
 <code>scanUsers(LDAPConnection $connection, int $pageSize = 100): iterable</code> method
@@ -1213,7 +1274,7 @@ Throw <code>LDAPException</code> if the scan is incomplete.
 The <code>ldapUserEnumeration()</code> service uses this capability on the configured
 directory and can be overridden separately. The native scan exposes
 <code>LDAPUserScan::close()</code> for consumers that stop before the end of iteration.
-<a href="../../commands/#synchronize-users">Synchronize Users</a></p>
+<a href="../../commands/ldap-sync/">Synchronize Users</a></p>
 
 
 

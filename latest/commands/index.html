@@ -16,7 +16,7 @@
         <link rel="prev" href="../guides/troubleshooting/">
       
       
-        <link rel="next" href="../references/configuration/">
+        <link rel="next" href="ldap-link/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Spark Commands - Shield LDAP</title>
+        <title>Overview - Shield LDAP</title>
       
     
     
@@ -132,7 +132,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Spark Commands
+              Overview
             
           </span>
         </div>
@@ -700,24 +700,6 @@
         
       
       
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Spark Commands
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -725,7 +707,7 @@
   <span class="md-ellipsis">
     
   
-    Spark Commands
+    Overview
   
 
     
@@ -735,97 +717,62 @@
 
       </a>
       
-        
+    </li>
+  
 
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+              
+            
+              
+                
   
   
   
+  
+    <li class="md-nav__item">
+      <a href="ldap-link/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
     
   
+    Link Existing Users
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#link-existing-users" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Link Existing Users
-      
-    </span>
-  </a>
+
+    
+  </span>
   
-    <nav class="md-nav" aria-label="Link Existing Users">
-      <ul class="md-nav__list">
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="ldap-sync/" class="md-nav__link">
         
-          <li class="md-nav__item">
-  <a href="#preview-and-link-one-user" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Preview and Link One User
-      
-    </span>
-  </a>
   
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#link-multiple-users" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Link Multiple Users
-      
-    </span>
-  </a>
   
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#repair-a-stale-link" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Repair a Stale Link
-      
-    </span>
-  </a>
+  <span class="md-ellipsis">
+    
   
-</li>
-        
-      </ul>
-    </nav>
+    Synchronize Users
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#synchronize-users" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Synchronize Users
-      
-    </span>
-  </a>
+
+    
+  </span>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#command-help" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Command Help
-      
-    </span>
-  </a>
   
-</li>
-      
-    </ul>
-  
-</nav>
-      
+
+      </a>
     </li>
   
 
@@ -996,86 +943,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#link-existing-users" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Link Existing Users
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Link Existing Users">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#preview-and-link-one-user" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Preview and Link One User
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#link-multiple-users" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Link Multiple Users
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#repair-a-stale-link" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Repair a Stale Link
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#synchronize-users" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Synchronize Users
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#command-help" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Command Help
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -1105,108 +972,14 @@ application, after installing Shield and running its migrations. Use a
 connection ID from <code>AuthLDAP::$connections</code>. Both commands use the configured
 service account over verified TLS. Run a preview before passing <code>--apply</code> to
 write changes. <a href="../references/configuration/">Configuration Reference</a></p>
-<h2 id="link-existing-users">Link Existing Users</h2>
-<p>Use <code>shield:ldap-link</code> to associate an existing Shield account with a directory
-account by its immutable identifier. The command looks up the Shield username
-in the directory attribute mapped by <code>profileAttributes['username']</code>. If there
-is no username mapping, configure exactly one <code>loginAttributes</code> entry.</p>
-<p>The lookup applies <code>loginFilter</code> and <code>eligibilityFilter</code> and requires a unique
-match across the configured user search bases. It skips reserved local accounts.
-For accounts with different usernames, use a verified link from application
-code. <a href="../guides/user_management/#linking-an-existing-shield-user">Linking an Existing Shield User</a></p>
-<h3 id="preview-and-link-one-user">Preview and Link One User</h3>
-<p>Preview the directory match for a specific Shield username. Check the matching
-directory identifier and confirm that both accounts belong to the same person
-before applying the link.</p>
-<div class="highlight"><pre><span></span><code><span class="go">php spark shield:ldap-link corporate alex.rivera</span>
-<span class="go">php spark shield:ldap-link corporate alex.rivera --apply</span>
-</code></pre></div>
-<p>Applying a link looks up the directory account again and stores the LDAP
-identity keyed by the connection and the immutable identifier, such as the
-normalized AD <code>objectGUID</code> or an OpenLDAP <code>entryUUID</code>.</p>
-<h3 id="link-multiple-users">Link Multiple Users</h3>
-<p>Omit the username to scan Shield users in batches. Review the proposed matches
-and resolve conflicts before applying the missing links with <code>--all --apply</code>.</p>
-<div class="highlight"><pre><span></span><code><span class="go">php spark shield:ldap-link corporate</span>
-<span class="go">php spark shield:ldap-link corporate --all --apply</span>
-</code></pre></div>
-<p>Bulk mode checks for duplicate local usernames and multiple Shield users
-matching the same LDAP object before any writes. It looks up each candidate
-again before saving a link to check that its username still resolves to the
-same directory identity. The summary reports linked, skipped, and conflicting
-accounts. Conflicts cause a nonzero exit status. An unexpected directory error
-stops the run. Each completed link is saved independently, so run another
-preview before retrying.</p>
-<h3 id="repair-a-stale-link">Repair a Stale Link</h3>
-<p>Recreating a directory account can give the same username a new immutable
-identifier. Preview the Shield user to see the <code>stale_link</code> status and the new
-directory identifier. Verify that the new account belongs to the Shield user,
-then pass the identifier from the preview to <code>--replace</code>.</p>
-<div class="highlight"><pre><span></span><code><span class="go">php spark shield:ldap-link corporate alex.rivera</span>
-<span class="go">php spark shield:ldap-link corporate alex.rivera --apply --replace 00112233-4455-6677-8899-aabbccddeeff</span>
-</code></pre></div>
-<p>Repair requires exactly one existing link for the named user on the selected
-connection. The command repeats the directory lookup and updates the link if
-the identifier matches <code>--replace</code> and is available. A changed identifier or
-an identity conflict blocks the repair.</p>
-<h2 id="synchronize-users">Synchronize Users</h2>
-<p>Use <code>shield:ldap-sync</code> to provision eligible directory accounts and update
-mapped profiles on linked Shield users. The search uses LDAP paged results
-and combines <code>loginFilter</code> and <code>eligibilityFilter</code> across the configured
-<code>userBaseDn</code> values, or <code>baseDn</code> when <code>userBaseDn</code> is omitted.</p>
-<div class="highlight"><pre><span></span><code><span class="go">php spark shield:ldap-sync corporate</span>
-<span class="go">php spark shield:ldap-sync corporate --apply</span>
-</code></pre></div>
-<table>
-<thead>
-<tr>
-<th>Connection option</th>
-<th>Effect</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>provisionUsers</code></td>
-<td>Set to <code>true</code> to create Shield accounts for eligible directory entries with no existing link. New users receive Shield’s configured default group.</td>
-</tr>
-<tr>
-<td><code>updateProfile</code></td>
-<td>Set to <code>true</code> to apply mappings to existing linked accounts. Mappings also apply when creating accounts.</td>
-</tr>
-<tr>
-<td><code>profileAttributes</code></td>
-<td>Maps writable Shield fields to LDAP attributes. Map <code>username</code> when provisioning users.</td>
-</tr>
-</tbody>
-</table>
-<p>Synchronization matches existing links by immutable directory identifier and
-skips reserved local accounts. If an existing Shield username conflicts with
-a new directory account, verify both accounts and create the link first.
-<a href="#link-existing-users">Link Existing Users</a></p>
-<p>The native transport requires the directory to honor the critical LDAP paged
-results control. The command requests 100 entries per page and reports
-<code>scan_limit_exceeded</code> if it needs more than 10,000 pages across the configured
-bases. An incomplete scan stops before the command writes any users.</p>
-<p>The preview shows the changes planned against the current Shield data. Apply
-checks that data again before writing each user, so a later run can report
-different results. The command reports <code>would_create</code> and <code>would_update</code> in a
-preview and <code>created</code> and <code>updated</code> when applying changes. The summary includes
-unchanged and skipped accounts and conflicts. Conflicts cause a nonzero exit
-status.</p>
-<p>Each user's changes are committed in a separate transaction. If a run is
-interrupted, rerun the command from the beginning. Existing links identify
-users already processed. Deleted or disabled directory accounts keep their
-current local status. Review and update their Shield access through your
-application’s offboarding process.</p>
-<p>The command stages mapped profile values in memory up to PHP’s
-<code>php://temp</code> threshold of 2 MiB. Larger scans can spill into PHP’s system
-temporary directory. Use a restricted temporary directory on the host when
-processing sensitive profile attributes.</p>
-<h2 id="command-help">Command Help</h2>
-<p>Get the supported arguments and options in the terminal.</p>
-<div class="highlight"><pre><span></span><code><span class="go">php spark help shield:ldap-link</span>
-<span class="go">php spark help shield:ldap-sync</span>
-</code></pre></div>
+<ul>
+<li><a id="link-existing-users"></a><a href="ldap-link/">Link Existing Users</a> with <code>shield:ldap-link</code>.</li>
+<li><a id="synchronize-users"></a><a href="ldap-sync/">Synchronize Users</a> with <code>shield:ldap-sync</code>.<ul>
+<li><a id="synchronize-only-groups"></a><a href="ldap-sync/#synchronize-only-groups">Synchronize only groups</a>.</li>
+<li><a id="run-every-five-minutes-with-codeigniter-tasks"></a><a id="move-sign-in-updates-to-scheduled-commands"></a><a href="ldap-sync/#move-sign-in-updates-to-scheduled-commands">Schedule group and profile updates</a>.</li>
+</ul>
+</li>
+</ul>
 
 
 
@@ -1259,13 +1032,13 @@ processing sensitive profile attributes.</p>
         
         
           
-          <a href="../references/configuration/" class="md-footer__link md-footer__link--next" aria-label="Next: Configuration Reference">
+          <a href="ldap-link/" class="md-footer__link md-footer__link--next" aria-label="Next: Link Existing Users">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Configuration Reference
+                Link Existing Users
               </div>
             </div>
             <div class="md-footer__button md-icon">
