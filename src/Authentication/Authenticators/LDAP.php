@@ -31,8 +31,6 @@ use Maniaba\ShieldLDAP\Exceptions\LDAPException;
  */
 class LDAP extends Session
 {
-    private const DUMMY_PASSWORD_HASH = '$2y$12$lGwEWbbJHNlNehaFdwrcH.e7c0S3L2sMFVZr6LX/IHjU0ONwWzogq';
-
     private readonly AuthLDAP $ldapConfig;
     private readonly LDAPDirectoryInterface $directory;
     private readonly LDAPUserResolver $resolver;
@@ -243,7 +241,14 @@ class LDAP extends Session
 
         if ($user === null || (string) $user->id !== (string) $expectedId || $hash === null || $hash === '') {
             $authOptions = get_object_vars(config('Auth'));
-            $passwords->verify($password, $authOptions['dummyPasswordHash'] ?? self::DUMMY_PASSWORD_HASH);
+            $dummyHash   = $authOptions['dummyPasswordHash'] ?? null;
+
+            if ($dummyHash === null) {
+                // Match the configured password hashing cost on older Shield releases.
+                $passwords->hash('');
+            } else {
+                $passwords->verify($password, $dummyHash);
+            }
 
             return $this->failedResult();
         }
