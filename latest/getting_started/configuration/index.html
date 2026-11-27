@@ -457,6 +457,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Prepare the Directory and PHP Runtime">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#local-tls-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local TLS Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -475,6 +492,17 @@
     <span class="md-ellipsis">
       
         OpenLDAP
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multiple-search-bases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple Search Bases
       
     </span>
   </a>
@@ -764,7 +792,7 @@
   <span class="md-ellipsis">
     
   
-    References
+    Commands
   
 
     
@@ -777,6 +805,88 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spark Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    References
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -912,6 +1022,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Prepare the Directory and PHP Runtime">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#local-tls-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local TLS Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -930,6 +1057,17 @@
     <span class="md-ellipsis">
       
         OpenLDAP
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multiple-search-bases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple Search Bases
       
     </span>
   </a>
@@ -975,7 +1113,7 @@
 
 
   
-    <a href="https://github.com/maniaba/shield-ldap/edit/main/docs/getting_started/configuration.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/maniaba/shield-ldap/edit/develop/docs/getting_started/configuration.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -1012,9 +1150,28 @@ TLS_REQSAN demand
 </ol>
 <p>Use <code>ldaps</code> for listeners that negotiate TLS as soon as they accept a connection
 (normally port 636). Use <code>starttls</code> for listeners that accept the LDAP StartTLS
-operation before bind (normally port 389). The native transport requires TLS
-validation and rejects referrals. Each process uses the same OpenLDAP client
-trust policy for its configured directories.</p>
+operation before bind (normally port 389). The native transport verifies
+certificates by default and rejects referrals. Verified connections use the
+OpenLDAP client trust policy for the PHP process.</p>
+<h3 id="local-tls-testing">Local TLS Testing</h3>
+<p>For controlled local testing with StartTLS, declare <code>verifyCertificate</code> in your
+connection settings in <strong>app/Config/AuthLDAP.php</strong>. For a connection named
+<code>default</code>, add these entries to <code>$connections['default']</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="x">'encryption'        =&gt; 'starttls',</span>
+<span class="x">'verifyCertificate' =&gt; true,</span>
+</code></pre></div>
+<p>Override the option in the testing environment's <strong>.env</strong>.</p>
+<div class="highlight"><pre><span></span><code><span class="na">authldap.connections.default.verifyCertificate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">false</span>
+</code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Setting this option to <code>false</code> skips certificate chain and hostname checks.
+StartTLS is still required, but the client cannot verify the server's
+identity. Keep certificate verification enabled in production.</p>
+</div>
+<p>The native transport supports this override for StartTLS starting with PHP
+8.3.22 in the 8.3 series and PHP 8.4.8 in the 8.4 series. PHP 8.5 and later also
+support it. LDAPS and earlier PHP versions reject the override.</p>
 <h2 id="active-directory">Active Directory</h2>
 <p>The following configuration searches two domain controllers in order. Users can
 sign in with <code>sAMAccountName</code> or <code>userPrincipalName</code>. The login filter excludes
@@ -1095,6 +1252,21 @@ This example looks up users by <code>uid</code> and links their Shield accounts 
 identifier according to its schema. The identifier must be unique, readable, and
 stable across account renames and moves. See <a href="../../guides/login_eligibility/">Login Eligibility</a>
 and the <a href="../../references/configuration/">configuration reference</a>.</p>
+<h2 id="multiple-search-bases">Multiple Search Bases</h2>
+<p>Set <code>userBaseDn</code> to a list of 1 to 10 distinguished names to configure the user
+search bases. For example, add these settings to the <code>corporate</code> connection to
+search two sibling organizational units in Active Directory.</p>
+<div class="highlight"><pre><span></span><code><span class="x">'baseDn'     =&gt; 'DC=example,DC=com',</span>
+<span class="x">'userBaseDn' =&gt; [</span>
+<span class="x">    'OU=Employees,DC=example,DC=com',</span>
+<span class="x">    'OU=Contractors,DC=example,DC=com',</span>
+<span class="x">],</span>
+</code></pre></div>
+<p>Use a string <code>userBaseDn</code> for a single user search base. If you omit it or set
+it to <code>null</code>, user searches use the root DN in <code>baseDn</code>. The service account
+needs permission to search each selected base. The native transport checks for
+a single match across the selected bases before it verifies the password. See the
+<a href="../../references/configuration/#login-and-eligibility-filters">configuration reference</a>.</p>
 <h2 id="environment-overrides">Environment Overrides</h2>
 <p>Keep <strong>.env</strong> outside version control. When a deployment environment requires
 underscores in variable names, use keys such as

@@ -639,6 +639,88 @@
       
   
   
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spark Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -652,10 +734,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -673,8 +755,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -975,7 +1057,7 @@
 
 
   
-    <a href="https://github.com/maniaba/shield-ldap/edit/main/docs/references/diagnostics.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/maniaba/shield-ldap/edit/develop/docs/references/diagnostics.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -1021,13 +1103,14 @@ operator logs. See <a href="../../guides/troubleshooting/">Troubleshooting</a> f
 interpret connection and sign-in failures.</p>
 <h2 id="preview-directory-entries">Preview Directory Entries</h2>
 <p>The following example requests display names from a configured Active
-Directory user search. Use a trusted group search base and group filter with
-the same method to inspect group entries.</p>
+Directory user search. <code>preview()</code> accepts one trusted base DN per call. To
+compare multiple bases, make a separate call for each one. Use a trusted group
+search base and group filter with the same method to inspect group entries.</p>
 <div class="highlight"><pre><span></span><code><span class="x">use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPFilter;</span>
 
 <span class="x">$entries = $directory-&gt;preview(</span>
 <span class="x">    $connection,</span>
-<span class="x">    $connection-&gt;userBaseDn ?? $connection-&gt;baseDn,</span>
+<span class="x">    'OU=Employees,DC=example,DC=com',</span>
 <span class="x">    LDAPFilter::all($connection-&gt;loginFilter, $connection-&gt;eligibilityFilter),</span>
 <span class="x">    ['sAMAccountName', 'displayName'],</span>
 <span class="x">    20,</span>
@@ -1046,8 +1129,15 @@ a Shield session or updating a Shield account. The application supplies the
 trusted connection and a login identifier and password from the operator's
 request.</p>
 <div class="highlight"><pre><span></span><code><span class="x">use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPFilter;</span>
+<span class="x">use Maniaba\ShieldLDAP\Authentication\LDAP\MultiBaseLDAPDirectoryInterface;</span>
+<span class="x">use Maniaba\ShieldLDAP\Exceptions\LDAPException;</span>
 
+<span class="x">$baseDn  = $connection-&gt;userBaseDn ?? $connection-&gt;baseDn;</span>
 <span class="x">$matches = [];</span>
+
+<span class="x">if (is_array($baseDn) &amp;&amp; ! $directory instanceof MultiBaseLDAPDirectoryInterface) {</span>
+<span class="x">    throw new LDAPException('invalid_configuration');</span>
+<span class="x">}</span>
 
 <span class="x">foreach ($connection-&gt;loginAttributes as $attribute) {</span>
 <span class="x">    $matches[] = LDAPFilter::equal($attribute, $identifier);</span>
@@ -1055,7 +1145,7 @@ request.</p>
 
 <span class="x">$entry = $directory-&gt;authenticate(</span>
 <span class="x">    $connection,</span>
-<span class="x">    $connection-&gt;userBaseDn ?? $connection-&gt;baseDn,</span>
+<span class="x">    $baseDn,</span>
 <span class="x">    LDAPFilter::all($connection-&gt;loginFilter, LDAPFilter::any(...$matches)),</span>
 <span class="x">    [],</span>
 <span class="x">    $password,</span>
@@ -1090,12 +1180,36 @@ To provide a different directory transport, implement
 <code>Maniaba\ShieldLDAP\Authentication\LDAP\LDAPDirectoryInterface</code> and declare
 a <code>ldapDirectory()</code> service in <strong>app/Config/Services.php</strong>. Follow the
 <a href="https://codeigniter.com/user_guide/concepts/services.html">CodeIgniter Services guide</a>.</p>
+<p>For configurations that use a list of search bases for sign-in, implement
+<code>Maniaba\ShieldLDAP\Authentication\LDAP\MultiBaseLDAPDirectoryInterface</code>.
+Its <code>authenticate()</code> method accepts a string or a list of base DNs and must
+confirm a single matching entry across all supplied bases before verifying the
+password. <code>LDAPDirectoryInterface</code> continues to support transports that use
+a single string base DN. Both interfaces keep <code>preview()</code> limited to one base
+per call.</p>
 <p>An implementation used for sign-in must verify the submitted password over
 a trusted encrypted connection, require one matching user, and recheck the
 same immutable identity against the eligibility filter. Return the entry DN
 and the requested attribute values using lowercase keys and lists of strings.
 Throw <code>LDAPException</code> with a reason code instead of passing native exceptions
 or credentials to the application.</p>
+<p>For <code>shield:ldap-link</code>, provide
+<code>Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserLookupInterface</code>. The
+package's <code>ldapUserLookup()</code> service uses this capability on the configured
+directory. Applications can also override that service in
+<strong>app/Config/Services.php</strong>. <a href="../../commands/#link-existing-users">Link Existing Users</a></p>
+<p>To support <code>shield:ldap-sync</code>, implement
+<code>Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserEnumerationInterface</code>. Its
+<code>scanUsers(LDAPConnection $connection, int $pageSize = 100): iterable</code> method
+yields users matching <code>loginFilter</code> and <code>eligibilityFilter</code> from all effective
+user search bases. Use the service account over verified TLS. Yield entries
+with a <code>dn</code> and an <code>attributes</code> map of lowercase attribute names to lists of
+strings. Include the configured immutable ID and mapped profile attributes.
+Throw <code>LDAPException</code> if the scan is incomplete.
+The <code>ldapUserEnumeration()</code> service uses this capability on the configured
+directory and can be overridden separately. The native scan exposes
+<code>LDAPUserScan::close()</code> for consumers that stop before the end of iteration.
+<a href="../../commands/#synchronize-users">Synchronize Users</a></p>
 
 
 

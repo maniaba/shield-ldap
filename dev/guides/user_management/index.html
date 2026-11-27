@@ -652,6 +652,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#synchronizing-users-from-ldap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synchronizing Users from LDAP
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#linking-an-existing-shield-user" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -659,6 +670,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Linking an Existing Shield User">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#linking-from-application-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linking from Application Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -764,7 +792,7 @@
   <span class="md-ellipsis">
     
   
-    References
+    Commands
   
 
     
@@ -777,6 +805,88 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spark Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    References
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -915,6 +1025,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#synchronizing-users-from-ldap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synchronizing Users from LDAP
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#linking-an-existing-shield-user" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -922,6 +1043,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Linking an Existing Shield User">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#linking-from-application-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linking from Application Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -975,7 +1113,7 @@
 
 
   
-    <a href="https://github.com/maniaba/shield-ldap/edit/main/docs/guides/user_management.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/maniaba/shield-ldap/edit/develop/docs/guides/user_management.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -1012,6 +1150,10 @@ to apply the mapping only when provisioning. The mapper leaves
 unmapped fields and Shield's password and email identities under
 application control. Store directory contact information in a dedicated
 profile field such as <code>directory_email</code>.</p>
+<p>LDAP provisioning assigns Shield's configured <code>AuthGroups.defaultGroup</code> to new
+users, as Shield's <code>shield:user create</code> does. Provisioning does not trigger the
+web <code>register</code> event. A successful LDAP sign-in still triggers Shield's
+standard login event.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>Shield may require a local activation step. When registration activation is
@@ -1020,10 +1162,18 @@ through the application's trusted workflow. For login actions, use a
 contact identity verified by your application or an action that supports
 directory-only users. <a href="https://github.com/codeigniter4/shield/blob/develop/docs/references/authentication/auth_actions.md">Shield authentication actions</a></p>
 </div>
+<h2 id="synchronizing-users-from-ldap">Synchronizing Users from LDAP</h2>
+<p>Use <code>shield:ldap-sync</code> from a trusted administrative shell to preview and apply
+provisioning and mapped profile updates in bulk.
+<a href="../../commands/#synchronize-users">Spark Commands</a></p>
 <h2 id="linking-an-existing-shield-user">Linking an Existing Shield User</h2>
-<p>During migration, start with provisioning disabled. In a trusted operator
-workflow, verify the directory account and select the Shield user who owns
-it. Then create the link using the verified external identifier and
+<p>During migration, start with provisioning disabled. You can keep LDAP web
+sign-in disabled while using <code>shield:ldap-link</code> to preview and link accounts by
+username from a trusted administrative shell.
+<a href="../../commands/#link-existing-users">Spark Commands</a></p>
+<h3 id="linking-from-application-code">Linking from Application Code</h3>
+<p>In an application workflow, verify the directory account and select the Shield
+user who owns it. Create the link using the verified external identifier and
 selected Shield user ID.</p>
 <div class="highlight"><pre><span></span><code><span class="x">use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;</span>
 
@@ -1054,9 +1204,11 @@ transaction on the Shield database connection.</p>
 named local Shield account. Configure a Shield login MFA action for each
 reserved operator and confirm they can complete it during an LDAP outage.
 The authenticator requires a pending login action for a reserved account
-before establishing a session. Every other identifier is checked by the
-selected LDAP directory. Rejected directory credentials and outages both
-deny a new LDAP login.</p>
+before establishing a session and issues remember-me tokens only for directory
+accounts. Every other identifier is checked by the selected LDAP directory.
+Rejected directory credentials and outages both deny a new LDAP login.</p>
+<p>Revoke pre-migration remember-me tokens for reserved local accounts before
+enabling remembered sign-ins.</p>
 <h2 id="authorization">Authorization</h2>
 <p>Directory group filters control who may sign in. Manage groups and
 permissions with <a href="https://github.com/codeigniter4/shield/blob/develop/docs/references/authorization.md">Shield authorization</a>,
@@ -1064,18 +1216,20 @@ including assignment of any groups your application requires for new users.</p>
 <h2 id="account-disabling-and-password-recovery">Account Disabling and Password Recovery</h2>
 <p>Directory eligibility is checked during password login. When disabling an
 account in the directory, use your application's established procedures to
-revoke its existing Shield sessions and API tokens when immediate access
-removal is required.</p>
+revoke its existing Shield sessions, API tokens, and remember-me tokens when
+immediate access removal is required.</p>
 <p>The authenticator uses the submitted directory password for verification.
 Shield stores the directory identity link and the mapped profile fields. A
 directory-only user recovers their password through the directory. Scope
 Shield's <code>force-reset</code> filter to users with a Shield
 email/password identity if your Shield version requires that identity for a
 reset check. <a href="https://github.com/codeigniter4/shield/pull/1411">Shield force-reset compatibility</a></p>
-<p>For an LDAP-only application, review existing remember-me cookies and
-alternative login paths during migration. The LDAP authenticator issues no
-remember-me token. Keep Shield's <code>allowRemembering</code> disabled and revoke
-pre-migration tokens according to your application's policies.</p>
+<p><a href="../../quick_start_guide/using_ldap_auth/#remembered-sign-ins">Remembered sign-ins</a>
+are restored by Shield using the token and local user record, without rebinding
+to LDAP or checking the user's current status in the directory. Shield rotates
+the token on restoration and revokes the user's remember-me tokens on logout.
+To revoke a user's remember-me tokens from an administrator workflow, pass the
+user to <code>auth('session')-&gt;getAuthenticator()-&gt;forget($user)</code>.</p>
 
 
 

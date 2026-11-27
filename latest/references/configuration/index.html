@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://maniaba.github.io/shield-ldap/dev/references/configuration/">
       
       
-        <link rel="prev" href="../../guides/troubleshooting/">
+        <link rel="prev" href="../../commands/">
       
       
         <link rel="next" href="../diagnostics/">
@@ -639,6 +639,88 @@
       
   
   
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spark Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -652,10 +734,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -673,8 +755,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -965,7 +1047,7 @@
 
 
   
-    <a href="https://github.com/maniaba/shield-ldap/edit/main/docs/references/configuration.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/maniaba/shield-ldap/edit/develop/docs/references/configuration.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -1035,7 +1117,7 @@ is called. Use <code>connectionIds()</code> to list configured IDs.</p>
 <tr>
 <td><code>baseDn</code></td>
 <td>Required</td>
-<td>Base DN of the directory naming context.</td>
+<td>Root DN of the directory as a string.</td>
 </tr>
 <tr>
 <td><code>bindDn</code></td>
@@ -1051,6 +1133,11 @@ is called. Use <code>connectionIds()</code> to list configured IDs.</p>
 <td><code>encryption</code></td>
 <td><code>'ldaps'</code></td>
 <td>Use <code>'ldaps'</code> or <code>'starttls'</code>.</td>
+</tr>
+<tr>
+<td><code>verifyCertificate</code></td>
+<td><code>true</code></td>
+<td>Verifies the server certificate chain and hostname. Set to <code>false</code> only for <a href="../../getting_started/configuration/#local-tls-testing">local StartTLS testing</a>.</td>
 </tr>
 <tr>
 <td><code>port</code></td>
@@ -1070,7 +1157,7 @@ is called. Use <code>connectionIds()</code> to list configured IDs.</p>
 <tr>
 <td><code>userBaseDn</code></td>
 <td><code>null</code></td>
-<td>Base DN for user lookups. With <code>null</code>, lookups use <code>baseDn</code>.</td>
+<td>A single DN or an ordered list of 1 to 10 DNs for user lookups. With <code>null</code>, lookups use <code>baseDn</code>. See <a href="../../getting_started/configuration/#multiple-search-bases">Multiple Search Bases</a>.</td>
 </tr>
 <tr>
 <td><code>loginFilter</code></td>
@@ -1095,17 +1182,17 @@ is called. Use <code>connectionIds()</code> to list configured IDs.</p>
 <tr>
 <td><code>provisionUsers</code></td>
 <td><code>false</code></td>
-<td>Creates a Shield user on successful LDAP sign-in when there is no existing link.</td>
+<td>Creates a Shield user during successful LDAP sign-in or <a href="../../commands/#synchronize-users">directory synchronization</a> when there is no existing link.</td>
 </tr>
 <tr>
 <td><code>eligibilityFilter</code></td>
 <td><code>'(objectClass=*)'</code></td>
-<td>Additional trusted filter evaluated on the matched entry after password verification.</td>
+<td>Additional trusted filter evaluated after password verification at sign-in and combined with <code>loginFilter</code> during synchronization.</td>
 </tr>
 <tr>
 <td><code>updateProfile</code></td>
 <td><code>true</code></td>
-<td>Updates mapped attributes on existing linked users during successful directory checks. When <code>false</code>, mappings still apply on provisioning.</td>
+<td>Updates mapped attributes on existing linked users during successful directory checks and synchronization. When <code>false</code>, mappings still apply on provisioning.</td>
 </tr>
 </tbody>
 </table>
@@ -1118,9 +1205,12 @@ verification, and eligibility check stay on that endpoint. See
 <a href="../../guides/troubleshooting/">Troubleshooting</a> for common connection errors.</p>
 <h2 id="login-and-eligibility-filters">Login and Eligibility Filters</h2>
 <p>The initial lookup combines <code>loginFilter</code> with an OR of escaped equality tests
-for every entry in <code>loginAttributes</code>. The native transport requires exactly one
-entry, verifies the password, and checks the original lookup filter and
-<code>eligibilityFilter</code> against the same immutable directory identity.</p>
+for every entry in <code>loginAttributes</code>. When multiple search bases are configured,
+the native transport identifies a single match across the bases on the same
+endpoint. If overlapping searches return the same DN and immutable ID, they
+count as one match. Distinct matches and incomplete searches prevent sign-in.
+The transport then verifies the password and checks the original lookup filter
+and <code>eligibilityFilter</code> against the same immutable directory identity.</p>
 <p>See <a href="../../guides/login_eligibility/">Login Eligibility</a> for Active Directory
 and OpenLDAP examples, including disabled accounts and group membership.</p>
 <h3 id="building-filters">Building Filters</h3>
@@ -1164,7 +1254,7 @@ for examples using runtime values and DN components.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../../guides/troubleshooting/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Troubleshooting">
+          <a href="../../commands/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Spark Commands">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1174,7 +1264,7 @@ for examples using runtime values and DN components.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Troubleshooting
+                Spark Commands
               </div>
             </div>
           </a>

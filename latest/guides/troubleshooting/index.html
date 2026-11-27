@@ -16,7 +16,7 @@
         <link rel="prev" href="../user_management/">
       
       
-        <link rel="next" href="../../references/configuration/">
+        <link rel="next" href="../../commands/">
       
       
         
@@ -742,7 +742,7 @@
   <span class="md-ellipsis">
     
   
-    References
+    Commands
   
 
     
@@ -755,6 +755,88 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spark Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    References
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -931,7 +1013,7 @@
 
 
   
-    <a href="https://github.com/maniaba/shield-ldap/edit/main/docs/guides/troubleshooting.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/maniaba/shield-ldap/edit/develop/docs/guides/troubleshooting.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -979,14 +1061,15 @@ runtime. This command prompts for the service password.</p>
 and directory policy. For <code>invalid_bind_secret</code>, confirm that the
 connection defines a nonempty bind password and that the environment
 overrides the correct configuration key. <a href="../../getting_started/configuration/">Configuration</a></p>
-<p>For <code>search_timeout</code> or <code>incomplete_search</code>, check the user search base,
+<p>For <code>search_timeout</code> or <code>incomplete_search</code>, check each user search base,
 directory size limits, and whether the search spans naming contexts.
 Use a more selective base or filter. The native transport rejects
 referrals and incomplete login result sets.</p>
 <p>For <code>user_not_found</code>, <code>ambiguous_user</code>, or <code>ineligible_user</code>, preview the
 login and eligibility filters with the same service account. Check the
-search base, readable login attributes, and rules that determine account
-eligibility. An identifier must resolve to exactly one entry.
+configured search bases, readable login attributes, and rules that determine
+account eligibility. An identifier must resolve to exactly one entry across
+the effective search bases.
 <a href="../login_eligibility/">Login Eligibility</a></p>
 <h2 id="shield-user-and-login-action">Shield User and Login Action</h2>
 <ul>
@@ -1058,13 +1141,13 @@ eligibility. An identifier must resolve to exactly one entry.
         
         
           
-          <a href="../../references/configuration/" class="md-footer__link md-footer__link--next" aria-label="Next: Configuration Reference">
+          <a href="../../commands/" class="md-footer__link md-footer__link--next" aria-label="Next: Spark Commands">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Configuration Reference
+                Spark Commands
               </div>
             </div>
             <div class="md-footer__button md-icon">

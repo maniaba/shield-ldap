@@ -586,6 +586,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#remembered-sign-ins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remembered Sign-ins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#test-sign-in" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -775,7 +786,7 @@
   <span class="md-ellipsis">
     
   
-    References
+    Commands
   
 
     
@@ -788,6 +799,88 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Commands
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spark Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    References
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -970,6 +1063,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#remembered-sign-ins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remembered Sign-ins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#test-sign-in" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -997,7 +1101,7 @@
 
 
   
-    <a href="https://github.com/maniaba/shield-ldap/edit/main/docs/quick_start_guide/using_ldap_auth.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/maniaba/shield-ldap/edit/develop/docs/quick_start_guide/using_ldap_auth.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -1024,9 +1128,8 @@ session established by LDAP.</p>
 <span class="x">];</span>
 </code></pre></div>
 <p>In the same file, set the <code>login</code> entry in the existing <code>$views</code> array to
-<code>'\App\Views\auth\ldap_login'</code> and set the <code>allowRemembering</code> entry in
-<code>$sessionConfig</code> to <code>false</code>. The following settings hide the registration and
-magic-link links, which the example routes omit.</p>
+<code>'\App\Views\auth\ldap_login'</code>. The following settings hide the registration
+and magic-link links, which the example routes omit.</p>
 <div class="highlight"><pre><span></span><code><span class="x">public bool $allowRegistration = false;</span>
 <span class="x">public bool $allowMagicLinkLogins = false;</span>
 </code></pre></div>
@@ -1035,7 +1138,8 @@ magic-link links, which the example routes omit.</p>
 <strong>app/Views/auth/ldap_login.php</strong>. Replace the email input and its label with
 a text input named <code>username</code>. This accepts a short account name such as
 <code>alice</code> or a user principal name such as <code>alice@example.com</code>, depending on
-your directory configuration. Keep Shield's password input and CSRF field.</p>
+your directory configuration. Keep Shield's password input, CSRF field, and
+existing <strong>Remember me</strong> checkbox.</p>
 <div class="highlight"><pre><span></span><code><span class="x">&lt;label for="ldapUsername"&gt;</span><span class="cp">&lt;?</span><span class="o">=</span> <span class="nx">lang</span><span class="p">(</span><span class="s1">'Auth.username'</span><span class="p">)</span> <span class="cp">?&gt;</span><span class="x">&lt;/label&gt;</span>
 <span class="x">&lt;input id="ldapUsername" type="text" name="username" autocomplete="username" required&gt;</span>
 </code></pre></div>
@@ -1058,8 +1162,10 @@ access to the application.</p>
     <span class="k">public</span> <span class="k">function</span> <span class="nf">loginAction</span><span class="p">()</span><span class="o">:</span> <span class="nx">RedirectResponse</span>
     <span class="p">{</span>
         <span class="sd">/** @var LDAP $ldap */</span>
-        <span class="nv">$ldap</span>   <span class="o">=</span> <span class="nx">auth</span><span class="p">(</span><span class="s1">'ldap'</span><span class="p">)</span><span class="o">-&gt;</span><span class="na">getAuthenticator</span><span class="p">();</span>
-        <span class="nv">$result</span> <span class="o">=</span> <span class="nv">$ldap</span><span class="o">-&gt;</span><span class="na">attempt</span><span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">request</span><span class="o">-&gt;</span><span class="na">getPost</span><span class="p">([</span><span class="s1">'username'</span><span class="p">,</span> <span class="s1">'password'</span><span class="p">]));</span>
+        <span class="nv">$ldap</span> <span class="o">=</span> <span class="nx">auth</span><span class="p">(</span><span class="s1">'ldap'</span><span class="p">)</span><span class="o">-&gt;</span><span class="na">getAuthenticator</span><span class="p">();</span>
+
+        <span class="nv">$result</span> <span class="o">=</span> <span class="nv">$ldap</span><span class="o">-&gt;</span><span class="na">remember</span><span class="p">((</span><span class="nx">bool</span><span class="p">)</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">request</span><span class="o">-&gt;</span><span class="na">getPost</span><span class="p">(</span><span class="s1">'remember'</span><span class="p">))</span>
+            <span class="o">-&gt;</span><span class="na">attempt</span><span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">request</span><span class="o">-&gt;</span><span class="na">getPost</span><span class="p">([</span><span class="s1">'username'</span><span class="p">,</span> <span class="s1">'password'</span><span class="p">]));</span>
 
         <span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="nv">$result</span><span class="o">-&gt;</span><span class="na">isOK</span><span class="p">())</span> <span class="p">{</span>
             <span class="k">return</span> <span class="nx">redirect</span><span class="p">()</span><span class="o">-&gt;</span><span class="na">route</span><span class="p">(</span><span class="s1">'login'</span><span class="p">)</span><span class="o">-&gt;</span><span class="na">with</span><span class="p">(</span><span class="s1">'error'</span><span class="p">,</span> <span class="nv">$result</span><span class="o">-&gt;</span><span class="na">reason</span><span class="p">());</span>
@@ -1115,6 +1221,18 @@ For directory users provisioned without an email identity, choose an
 action that supports those accounts. Configure an applicable MFA action
 for each reserved local account if you use hybrid sign-in.</p>
 <p>See <a href="https://github.com/codeigniter4/shield/blob/develop/docs/references/authentication/auth_actions.md">Shield's authentication actions</a>.</p>
+<h2 id="remembered-sign-ins">Remembered Sign-ins</h2>
+<p>The <strong>Remember me</strong> checkbox uses Shield's <code>Auth.sessionConfig</code> settings. To
+enable it, set <code>allowRemembering</code> to <code>true</code> in your application's effective
+session configuration. <code>rememberCookieName</code> sets the cookie name and
+<code>rememberLength</code> sets its lifetime in seconds. The login action passes the
+checkbox choice to <code>remember()</code> and uses <code>withCookies()</code> to send Shield's
+cookie with the redirect.</p>
+<p>Shield issues the token after verifying the directory credentials. If a login
+action is required, the redirect to the action carries the cookie. The current
+sign-in remains pending until the user completes the action. The <code>session</code>
+alias handles restoring and rotating remember-me tokens.
+<a href="../../guides/user_management/#account-disabling-and-password-recovery">Account disabling and revocation</a></p>
 <h2 id="test-sign-in">Test Sign-in</h2>
 <ol>
 <li>Make sure <code>authldap.enabled = true</code>. Enable provisioning for the test
