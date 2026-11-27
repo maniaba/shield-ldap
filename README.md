@@ -24,7 +24,7 @@ version explicitly.
 composer require maniaba/shield-ldap:dev-main
 ```
 
-See the [Shield LDAP User Guide](https://maniaba.github.io/shield-ldap/) for
+See the [Shield LDAP User Guide](https://maniaba.github.io/shield-ldap/latest/) for
 installation, configuration, and web login. The [guide source](docs/index.md)
 is available in this repository.
 
