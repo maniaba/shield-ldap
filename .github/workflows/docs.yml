@@ -4,13 +4,16 @@ on:
   pull_request:
     paths:
       - 'docs/**'
+      - '.github/scripts/build-versioned-docs.py'
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
       - '.github/workflows/docs.yml'
   push:
     branches: [main]
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
     paths:
       - 'docs/**'
+      - '.github/scripts/build-versioned-docs.py'
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
       - '.github/workflows/docs.yml'
@@ -20,11 +23,13 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  check:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -34,26 +39,64 @@ jobs:
           cache-dependency-path: requirements-docs.txt
 
       - run: python -m pip install -r requirements-docs.txt
-      - run: mkdocs build --strict
 
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        if: github.ref == 'refs/heads/main'
-        with:
-          path: site
+      - name: Check the versioned build
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          python .github/scripts/build-versioned-docs.py "$RUNNER_TEMP/user-guide"
 
-  deploy:
+  request-release-publication:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      # The existing github-pages environment accepts deployments from main.
+      - run: gh workflow run docs.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+  publish:
     if: github.ref == 'refs/heads/main'
-    needs: build
     runs-on: ubuntu-latest
     concurrency:
       group: github-pages
       cancel-in-progress: false
     permissions:
+      contents: write
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-docs.txt
+
+      - run: python -m pip install -r requirements-docs.txt
+
+      - name: Build versioned documentation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          python .github/scripts/build-versioned-docs.py "$RUNNER_TEMP/user-guide"
+
+      - name: Save version history
+        run: git push origin gh-pages
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/user-guide
+
       - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         id: deployment

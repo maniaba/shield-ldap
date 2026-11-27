@@ -3,6 +3,7 @@ site_description: LDAP and Active Directory authentication for CodeIgniter Shiel
 site_url: https://maniaba.github.io/shield-ldap/
 repo_url: https://github.com/maniaba/shield-ldap
 edit_uri: edit/main/docs/
+strict: true
 
 theme:
   name: material
@@ -41,8 +42,18 @@ markdown_extensions:
   - pymdownx.highlight
   - pymdownx.superfences
 
+extra:
+  version:
+    provider: mike
+    default:
+      - latest
+      - dev
+
 plugins:
   - search
+  - mike:
+      alias_type: redirect
+      version_selector: false
 
 validation:
   links:

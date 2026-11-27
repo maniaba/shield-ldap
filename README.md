@@ -11,10 +11,17 @@ Install Shield and set up its database tables first. Shield LDAP requires PHP
 compatible CodeIgniter 4 release. The native transport requires PHP's `ldap`
 extension linked against OpenLDAP.
 
-Once the first stable release is available on Packagist, install it with Composer.
+Install a stable release from Packagist with Composer once one is available.
 
 ```console
 composer require maniaba/shield-ldap
+```
+
+To install the development branch currently available on Packagist, specify its
+version explicitly.
+
+```console
+composer require maniaba/shield-ldap:dev-main
 ```
 
 See the [Shield LDAP User Guide](https://maniaba.github.io/shield-ldap/) for
@@ -37,6 +44,12 @@ mkdocs serve
 ```
 
 Run `mkdocs build --strict` before submitting documentation changes.
+
+The [User Guide workflow](.github/workflows/docs.yml) publishes development
+documentation from `main` and one guide per stable `major.minor` release series
+from `vMAJOR.MINOR.PATCH` tags. The guide opens on the latest stable series,
+or on development documentation until the first stable release. Run the
+workflow on `main` to refresh the site after a publishing failure.
 
 ## License
 
