@@ -127,6 +127,25 @@ identifier according to its schema. The identifier must be unique, readable, and
 stable across account renames and moves. See [Login Eligibility](../guides/login_eligibility.md)
 and the [configuration reference](../references/configuration.md).
 
+## Synchronize the Shield Email Identity
+
+To use LDAP `mail` as the Shield email address, add this setting to your
+connection in **app/Config/AuthLDAP.php**.
+
+```php
+'emailIdentityAttribute' => 'mail',
+```
+
+The service account must be able to read the attribute. Restrict directory write
+access to trusted administrators because Shield can send login codes to this
+address. The selected connection requires exactly one valid email address on
+each sign-in. Set `$allowMagicLinkLogins` to `false` in **app/Config/Auth.php**
+and keep the effective setting disabled while these identities exist. Disable
+custom email-only sign-in and local password recovery for LDAP-managed accounts.
+
+See [Email Identity Ownership](../guides/user_management.md#email-identity-ownership)
+for details on provisioning and updates.
+
 ## Environment Overrides
 
 Keep **.env** outside version control. When a deployment environment requires

@@ -130,8 +130,10 @@ built-in email verification, set that entry to
 `\CodeIgniter\Shield\Authentication\Actions\Email2FA::class`.
 
 `Email2FA` uses the address in the user's local Shield email identity.
-Set up an independently verified address for each user and configure
-mail delivery in **app/Config/Email.php** before enabling the action.
+Set up an independently verified address for each user or enable
+[email identity synchronization](../getting_started/configuration.md#synchronize-the-shield-email-identity)
+from a trusted directory attribute. Configure mail delivery in
+**app/Config/Email.php** before enabling the action.
 For directory users provisioned without an email identity, choose an
 action that supports those accounts. Configure an applicable MFA action
 for each reserved local account if you use hybrid sign-in.

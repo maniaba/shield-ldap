@@ -51,6 +51,7 @@ class AuthLDAP extends BaseConfig
         //     'loginAttributes'     => ['sAMAccountName', 'userPrincipalName'],
         //     'externalIdAttribute' => 'objectGUID',
         //     'profileAttributes'   => ['username' => 'sAMAccountName'],
+        //     'emailIdentityAttribute' => 'mail',
         // ],
     ];
 

@@ -30,20 +30,22 @@ final readonly class LDAPUserResolver
     public const ID_TYPE = 'ldap';
 
     private UserIdentityModel $identities;
+    private LDAPEmailSynchronizer $emailSynchronizer;
 
     /**
      * Uses the standard identity model unless the caller supplies one.
      */
     public function __construct(private UserModel $users, ?UserIdentityModel $identities = null)
     {
-        $this->identities = $identities ?? model(UserIdentityModel::class);
+        $this->identities        = $identities ?? model(UserIdentityModel::class);
+        $this->emailSynchronizer = new LDAPEmailSynchronizer($this->identities);
     }
 
     /**
      * Resolve an immutable directory ID after credential and access checks.
      *
      * Profile keys must be explicitly mapped to writable UserModel columns.
-     * LDAP contact addresses cannot modify the local email/password identity.
+     * The optional email is synchronized separately from the profile columns.
      *
      * @param array<string, string|null> $profile
      */
@@ -53,11 +55,12 @@ final readonly class LDAPUserResolver
         array $profile = [],
         bool $provision = false,
         bool $updateProfile = true,
+        ?string $email = null,
     ): User {
         $key     = $this->identityKey($connectionId, $externalId);
         $profile = $this->validateProfile($profile);
 
-        return $this->atomically(function () use ($connectionId, $key, $profile, $provision, $updateProfile): User {
+        return $this->atomically(function () use ($connectionId, $key, $profile, $provision, $updateProfile, $email): User {
             $identity = $this->identities->getIdentityBySecret(self::ID_TYPE, $key);
 
             if ($identity === null) {
@@ -80,7 +83,7 @@ final readonly class LDAPUserResolver
                 $user = $this->readBackProfile($userId, $profile);
                 $this->createIdentity($connectionId, $key, $userId);
 
-                return $user;
+                return $this->syncEmail($user, $key, $email);
             }
 
             $user = $this->findUser($identity->user_id);
@@ -96,17 +99,16 @@ final readonly class LDAPUserResolver
                 }
             }
 
-            if ($profile === []) {
-                return $user;
+            if ($profile !== []) {
+                if (isset($profile['username'])) {
+                    $this->checkUsername($profile['username'], $identity->user_id);
+                }
+
+                $this->users->update($identity->user_id, $profile);
+                $user = $this->readBackProfile($identity->user_id, $profile);
             }
 
-            if (isset($profile['username'])) {
-                $this->checkUsername($profile['username'], $identity->user_id);
-            }
-
-            $this->users->update($identity->user_id, $profile);
-
-            return $this->readBackProfile($identity->user_id, $profile);
+            return $this->syncEmail($user, $key, $email);
         });
     }
 
@@ -207,6 +209,15 @@ final readonly class LDAPUserResolver
         if ($owner !== null && ($ownerId === null || (string) $owner->id !== (string) $ownerId)) {
             throw new LDAPException('identity_conflict');
         }
+    }
+
+    private function syncEmail(User $user, string $key, ?string $email): User
+    {
+        if ($email === null || ! $this->emailSynchronizer->synchronize($user, $key, $email)) {
+            return $user;
+        }
+
+        return $this->findUser($user->id ?? throw new LDAPException('identity_conflict'));
     }
 
     private function findUser(int|string $userId): User

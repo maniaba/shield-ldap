@@ -191,12 +191,17 @@ class LDAP extends Session
             $predicates[] = LDAPFilter::equal($attribute, $identifier);
         }
 
-        $filter = LDAPFilter::all($connection->loginFilter, LDAPFilter::any(...$predicates));
-        $entry  = $this->directory->authenticate(
+        $filter     = LDAPFilter::all($connection->loginFilter, LDAPFilter::any(...$predicates));
+        $attributes = [$connection->externalIdAttribute, ...array_values($connection->profileAttributes)];
+        if ($connection->emailIdentityAttribute !== null) {
+            $attributes[] = $connection->emailIdentityAttribute;
+        }
+
+        $entry = $this->directory->authenticate(
             $connection,
             $connection->userBaseDn ?? $connection->baseDn,
             $filter,
-            array_values(array_unique([$connection->externalIdAttribute, ...array_values($connection->profileAttributes)])),
+            array_values(array_unique($attributes)),
             $password,
             $connection->eligibilityFilter,
         );
@@ -222,12 +227,23 @@ class LDAP extends Session
             }
         }
 
+        $email = null;
+        if ($connection->emailIdentityAttribute !== null) {
+            $values = $entry['attributes'][strtolower($connection->emailIdentityAttribute)] ?? [];
+            if (count($values) !== 1) {
+                throw new LDAPException('invalid_profile');
+            }
+
+            $email = $values[0];
+        }
+
         return $this->resolver->resolve(
             $connection->id,
             $externalId,
             $profile,
             $connection->provisionUsers,
             $connection->updateProfile,
+            $email,
         );
     }
 

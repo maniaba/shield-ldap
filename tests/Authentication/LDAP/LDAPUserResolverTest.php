@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Maniaba\ShieldLDAP\Tests\Authentication\LDAP;
 
 use CodeIgniter\Config\Factories;
+use CodeIgniter\Shield\Authentication\Authenticators\Session;
 use CodeIgniter\Shield\Config\Auth;
 use CodeIgniter\Shield\Entities\UserIdentity;
 use CodeIgniter\Shield\Models\UserIdentityModel;
@@ -23,6 +24,7 @@ use Config\Services;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
 use Maniaba\ShieldLDAP\Tests\DatabaseTestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 
 /**
@@ -322,6 +324,197 @@ final class LDAPUserResolverTest extends DatabaseTestCase
             'username' => 'directory',
             'email'    => 'directory@example.test',
         ], true);
+    }
+
+    public function testSynchronizedAddressUsesTheShieldEmailIdentityWithoutAllowingPasswordLogin(): void
+    {
+        setting('Auth.allowMagicLinkLogins', false);
+        $users    = model(UserModel::class);
+        $resolver = new LDAPUserResolver($users);
+
+        $user = $resolver->resolve('corporate', 'immutable-object', ['username' => 'directory'], true, email: 'Directory@Example.Test');
+
+        $this->assertSame('directory@example.test', $user->email);
+        $this->assertSame(Session::ID_TYPE_EMAIL_PASSWORD, $user->getEmailIdentity()?->type);
+        $this->assertFalse((new Session($users))->check([
+            'email'    => $user->email,
+            'password' => 'directory-password',
+        ])->isOK());
+        $sameAddress = $resolver->resolve('corporate', 'immutable-object', email: 'DIRECTORY@example.test');
+        $this->assertSame($user->getEmailIdentity()->id, $sameAddress->getEmailIdentity()?->id);
+
+        $renamed = $resolver->resolve('corporate', 'immutable-object', email: 'Renamed@Example.Test');
+
+        $this->assertSame($user->id, $renamed->id);
+        $this->assertSame($user->getEmailIdentity()->id, $renamed->getEmailIdentity()?->id);
+        $this->assertSame('renamed@example.test', $renamed->email);
+        $this->assertSame($renamed->email, $resolver->resolve('corporate', 'immutable-object')->email);
+        $this->seeNumRecords(1, $this->tables['identities'], [
+            'user_id' => $user->id,
+            'type'    => Session::ID_TYPE_EMAIL_PASSWORD,
+        ]);
+    }
+
+    public function testDisabledProfileUpdatesLeaveTheEmailOnAnExistingAccount(): void
+    {
+        setting('Auth.allowMagicLinkLogins', false);
+        $resolver = new LDAPUserResolver(model(UserModel::class));
+        $user     = $resolver->resolve(
+            'corporate',
+            'immutable-object',
+            ['username' => 'directory'],
+            true,
+            updateProfile: false,
+            email: 'original@example.test',
+        );
+
+        $this->assertSame('original@example.test', $user->email);
+        $this->assertSame('original@example.test', $resolver->resolve(
+            'corporate',
+            'immutable-object',
+            updateProfile: false,
+            email: 'changed@example.test',
+        )->email);
+    }
+
+    public function testEmailSyncCanBeEnabledForAnExistingDirectoryAccount(): void
+    {
+        setting('Auth.allowMagicLinkLogins', false);
+        $resolver = new LDAPUserResolver(model(UserModel::class));
+        $user     = $resolver->resolve('corporate', 'immutable-object', ['username' => 'directory'], true);
+
+        $this->assertNull($user->email);
+
+        $updated = $resolver->resolve('corporate', 'immutable-object', email: 'directory@example.test');
+
+        $this->assertSame($user->id, $updated->id);
+        $this->assertSame('directory@example.test', $updated->email);
+    }
+
+    public function testEmailCollisionIsCaseInsensitiveAndRollsBackProvisioning(): void
+    {
+        setting('Auth.allowMagicLinkLogins', false);
+        $users    = model(UserModel::class);
+        $resolver = new LDAPUserResolver($users);
+        $localId  = $users->insert($users->createNewUser([
+            'username' => 'local',
+            'email'    => 'Existing@Example.Test',
+            'password' => 'local-password',
+        ]));
+
+        try {
+            $resolver->resolve('corporate', 'immutable-object', ['username' => 'directory'], true, email: 'existing@example.test');
+            $this->fail('An address owned by another account was accepted.');
+        } catch (LDAPException $exception) {
+            $this->assertSame('identity_conflict', $exception->reason);
+        }
+
+        $this->dontSeeInDatabase($this->tables['users'], ['username' => 'directory']);
+        $this->dontSeeInDatabase($this->tables['identities'], ['type' => LDAPUserResolver::ID_TYPE]);
+        $this->assertSame('Existing@Example.Test', $users->findById($localId)?->email);
+    }
+
+    public function testEmailSyncPreservesAnExistingLocalIdentity(): void
+    {
+        setting('Auth.allowMagicLinkLogins', false);
+        $users    = model(UserModel::class);
+        $resolver = new LDAPUserResolver($users);
+        $userId   = $users->insert($users->createNewUser([
+            'username' => 'local',
+            'email'    => 'local@example.test',
+            'password' => 'local-password',
+        ]));
+        $resolver->link('corporate', 'immutable-object', $userId);
+
+        $user = $resolver->resolve('corporate', 'immutable-object', email: 'directory@example.test');
+
+        $this->assertSame('local@example.test', $user->email);
+        $this->assertTrue(password_verify('local-password', $user->password_hash));
+        $this->seeNumRecords(1, $this->tables['identities'], [
+            'user_id' => $userId,
+            'type'    => Session::ID_TYPE_EMAIL_PASSWORD,
+        ]);
+    }
+
+    public function testLocalEmailChangeTakesPrecedenceOverThePreviousDirectoryAddress(): void
+    {
+        setting('Auth.allowMagicLinkLogins', false);
+        $users    = model(UserModel::class);
+        $resolver = new LDAPUserResolver($users);
+        $user     = $resolver->resolve('corporate', 'immutable-object', ['username' => 'directory'], true, email: 'original@example.test');
+
+        $user->email = 'managed-locally@example.test';
+        $users->save($user);
+
+        $resolved = $resolver->resolve('corporate', 'immutable-object', email: 'changed@example.test');
+
+        $this->assertSame('managed-locally@example.test', $resolved->email);
+    }
+
+    public function testAddingALocalPasswordStopsUpdatesToTheDirectoryAddress(): void
+    {
+        setting('Auth.allowMagicLinkLogins', false);
+        $users    = model(UserModel::class);
+        $resolver = new LDAPUserResolver($users);
+        $user     = $resolver->resolve('corporate', 'immutable-object', ['username' => 'directory'], true, email: 'original@example.test');
+
+        $user->setPassword('local-password');
+        $users->save($user);
+
+        $resolved = $resolver->resolve('corporate', 'immutable-object', email: 'changed@example.test');
+
+        $this->assertSame('original@example.test', $resolved->email);
+        $this->assertTrue(password_verify('local-password', $resolved->password_hash));
+    }
+
+    public function testASecondLinkedDirectoryCannotChangeTheSynchronizedAddress(): void
+    {
+        setting('Auth.allowMagicLinkLogins', false);
+        $resolver = new LDAPUserResolver(model(UserModel::class));
+        $user     = $resolver->resolve('corporate', 'shared-id', ['username' => 'directory'], true, email: 'corporate@example.test');
+        $resolver->link('partner', 'shared-id', $user->id);
+
+        $this->assertSame('corporate@example.test', $resolver->resolve('partner', 'shared-id', email: 'partner@example.test')->email);
+        $this->assertSame('renamed@example.test', $resolver->resolve('corporate', 'shared-id', email: 'renamed@example.test')->email);
+    }
+
+    #[DataProvider('provideInvalidDirectoryAddressCannotBeStored')]
+    public function testInvalidDirectoryAddressCannotBeStored(string $email): void
+    {
+        setting('Auth.allowMagicLinkLogins', false);
+        $resolver = new LDAPUserResolver(model(UserModel::class));
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('invalid_profile');
+
+        $resolver->resolve('corporate', 'immutable-object', ['username' => 'directory'], true, email: $email);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideInvalidDirectoryAddressCannotBeStored(): iterable
+    {
+        yield 'address list' => ['one@example.test,two@example.test'];
+
+        yield 'header injection' => ["one@example.test\r\nBcc: two@example.test"];
+
+        yield 'over storage limit' => ['one@' . str_repeat(str_repeat('a', 60) . '.', 4) . 'example.test'];
+    }
+
+    public function testMagicLinkConfigurationRejectsDirectoryEmailSync(): void
+    {
+        setting('Auth.allowMagicLinkLogins', true);
+        $resolver = new LDAPUserResolver(model(UserModel::class));
+
+        try {
+            $resolver->resolve('corporate', 'immutable-object', ['username' => 'directory'], true, email: 'directory@example.test');
+            $this->fail('The address would also enable magic-link login.');
+        } catch (LDAPException $exception) {
+            $this->assertSame('invalid_configuration', $exception->reason);
+        }
+
+        $this->dontSeeInDatabase($this->tables['users'], ['username' => 'directory']);
     }
 
     public function testUnwritableProfileFieldRollsBackProvisioning(): void

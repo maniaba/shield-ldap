@@ -30,10 +30,8 @@ connection option. [Shield user provider](https://github.com/codeigniter4/shield
 
 Mapped attributes must have at most one value. If a mapped attribute
 has no value, the mapping skips that field. Set `'updateProfile' => false`
-to apply the mapping only when provisioning. The mapper leaves
-unmapped fields and Shield's password and email identities under
-application control. Store directory contact information in a dedicated
-profile field such as `directory_email`.
+to apply the mapping only when provisioning. To synchronize Shield's email
+identity, use the separate `emailIdentityAttribute` setting.
 
 !!! note
 
@@ -42,6 +40,27 @@ profile field such as `directory_email`.
     through the application's trusted workflow. For login actions, use a
     contact identity verified by your application or an action that supports
     directory-only users. [Shield authentication actions](https://github.com/codeigniter4/shield/blob/develop/docs/references/authentication/auth_actions.md)
+
+## Email Identity Ownership
+
+Configure [`emailIdentityAttribute`](../getting_started/configuration.md#synchronize-the-shield-email-identity)
+to copy a directory-managed address into the standard Shield `email_password`
+identity after directory verification. The resolver lowercases the address.
+Shield exposes it through `$user->email` and uses it for `Email2FA`. The identity
+has a disabled password placeholder. LDAP passwords are used only for directory
+verification. Synchronization uses the existing Shield tables.
+
+The LDAP link that creates an email identity manages updates to that identity.
+Existing local email identities take precedence. When the application changes
+the address or assigns a local password on an LDAP-managed identity, it
+takes ownership of that identity. The resolver also respects a different LDAP
+link's ownership and an application that removes its email identity.
+
+With `updateProfile` enabled, the resolver can create an email identity for an
+existing linked user or update an address managed by the same LDAP link. Set
+`updateProfile` to `false` to synchronize the address only when provisioning a
+new user. An address already assigned to another Shield user blocks the write.
+The resolver links accounts by connection ID and immutable directory identifier.
 
 ## Linking an Existing Shield User
 
@@ -103,11 +122,11 @@ revoke its existing Shield sessions and API tokens when immediate access
 removal is required.
 
 The authenticator uses the submitted directory password for verification.
-Shield stores the directory identity link and the mapped profile fields. A
-directory-only user recovers their password through the directory. Scope
-Shield's `force-reset` filter to users with a Shield
-email/password identity if your Shield version requires that identity for a
-reset check. [Shield force-reset compatibility](https://github.com/codeigniter4/shield/pull/1411)
+Shield stores the directory identity link, mapped profile fields, and any
+[opted-in email identity](#email-identity-ownership). A directory-only user
+recovers their password through the directory. Scope Shield's `force-reset`
+filter to accounts that use local passwords.
+[Shield force-reset compatibility](https://github.com/codeigniter4/shield/pull/1411)
 
 For an LDAP-only application, review existing remember-me cookies and
 alternative login paths during migration. The LDAP authenticator issues no

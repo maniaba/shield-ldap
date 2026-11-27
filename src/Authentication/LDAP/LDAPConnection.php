@@ -53,6 +53,7 @@ final readonly class LDAPConnection
         public bool $provisionUsers = false,
         public string $eligibilityFilter = '(objectClass=*)',
         public bool $updateProfile = true,
+        public ?string $emailIdentityAttribute = null,
     ) {
         if (preg_match('/\A[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}\z/', $id) !== 1
             || $hosts === [] || count($hosts) > 10 || ! array_is_list($hosts)
@@ -91,6 +92,10 @@ final readonly class LDAPConnection
 
         foreach ([$externalIdAttribute, ...$loginAttributes, ...array_values($profileAttributes)] as $attribute) {
             LDAPFilter::validateAttribute($attribute);
+        }
+
+        if ($emailIdentityAttribute !== null) {
+            LDAPFilter::validateAttribute($emailIdentityAttribute);
         }
 
         // A closure keeps the secret out of JSON, var_export(), and serialization.
