@@ -45,15 +45,12 @@ markdown_extensions:
 extra:
   version:
     provider: mike
-    alias: true
-    default:
-      - latest
-      - dev
+    default: latest
 
 plugins:
   - search
   - mike:
-      alias_type: redirect
+      alias_type: copy
 
 validation:
   links:

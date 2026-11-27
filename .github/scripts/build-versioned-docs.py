@@ -48,7 +48,7 @@ def deploy_release(version, tag):
             run("git", "worktree", "remove", str(source))
 
 
-def export_site(output, version, default):
+def export_site(output):
     output.mkdir(parents=True)
     with TemporaryFile() as archive:
         subprocess.run(["git", "archive", "gh-pages"], stdout=archive, check=True)
@@ -57,13 +57,13 @@ def export_site(output, version, default):
             site.extractall(output, filter="data")
 
     # Keep public URLs that predate versioned documentation working.
-    version_root = output / version
+    version_root = output / "latest"
     for page in version_root.rglob("*/index.html"):
         relative = page.relative_to(version_root)
         legacy_page = output / relative
         if legacy_page.exists():
             continue
-        target = escape(relpath(Path(default) / relative.parent, relative.parent) + "/")
+        target = escape(relpath(Path("latest") / relative.parent, relative.parent) + "/")
         legacy_page.parent.mkdir(parents=True, exist_ok=True)
         legacy_page.write_text(
             '<!doctype html>\n<html lang="en"><meta charset="utf-8">\n'
@@ -92,12 +92,11 @@ def build(output):
     published = published_versions()
     stable = [version for version in published if STABLE_VERSION.fullmatch(version)]
     version = max(stable, key=version_number, default="dev")
-    default = "latest" if stable else "dev"
-    if stable and default not in published[version]["aliases"]:
-        run("mike", "alias", "--update-aliases", "--alias-type", "redirect", version, default)
+    if "latest" not in published[version]["aliases"]:
+        run("mike", "alias", "--update-aliases", version, "latest")
 
-    run("mike", "set-default", default)
-    export_site(output, version, default)
+    run("mike", "set-default", "latest")
+    export_site(output)
 
 
 if __name__ == "__main__":

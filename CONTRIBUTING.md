@@ -60,8 +60,8 @@ directory data from any configuration or logs you share.
 The [User Guide workflow](.github/workflows/docs.yml) publishes development
 documentation from `main` and a guide for each stable `vMAJOR.MINOR.PATCH` tag.
 Each stable guide has its own URL, such as `/1.2.3/`, and appears in the version
-selector. The guide opens on the latest stable release, or on development
-documentation until the first stable release. Run the workflow on `main` to
+selector. The `/latest/` address serves the development guide until the first
+stable release, then serves the latest stable guide. Run the workflow on `main` to
 refresh the site after a publishing failure.
 
 ## Shield Compatibility Updates
