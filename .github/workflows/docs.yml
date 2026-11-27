@@ -46,6 +46,9 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           python .github/scripts/build-versioned-docs.py "$RUNNER_TEMP/user-guide"
 
+      - name: Check that the version selector is enabled
+        run: grep -Eq '"version":[[:space:]]*\{[^}]*"provider":[[:space:]]*"mike"' "$RUNNER_TEMP/user-guide/dev/index.html"
+
   request-release-publication:
     if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest

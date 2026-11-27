@@ -45,6 +45,7 @@ markdown_extensions:
 extra:
   version:
     provider: mike
+    alias: true
     default:
       - latest
       - dev
@@ -53,7 +54,6 @@ plugins:
   - search
   - mike:
       alias_type: redirect
-      version_selector: false
 
 validation:
   links:

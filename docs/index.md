@@ -5,7 +5,7 @@ CodeIgniter Shield. The authenticator verifies directory credentials over LDAPS
 or StartTLS and completes sign-in through Shield's session and login actions.
 
 Run `composer show maniaba/shield-ldap` in your application to find its installed
-version. Use the version selector to find the guide for that release series.
+version. Use the version selector in the header to find the guide for that release.
 Select **Development** if you installed `dev-main`.
 
 ## Getting Started

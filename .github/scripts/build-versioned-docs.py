@@ -11,6 +11,9 @@ from posixpath import relpath
 from tempfile import TemporaryDirectory, TemporaryFile
 
 
+STABLE_VERSION = re.compile(r"(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*)){2}")
+
+
 def capture(*command):
     return subprocess.check_output(command, text=True).strip()
 
@@ -24,28 +27,23 @@ def version_number(version):
 
 
 def stable_tags():
-    tags = {}
-    for tag in capture("git", "tag", "--list", "v*").splitlines():
-        if not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", tag):
-            continue
-        parts = version_number(tag[1:])
-        series = f"{parts[0]}.{parts[1]}"
-        if series not in tags or parts > version_number(tags[series][1:]):
-            tags[series] = tag
-
-    return tags
+    tags = capture("git", "tag", "--list", "v*").splitlines()
+    return sorted(
+        (tag for tag in tags if STABLE_VERSION.fullmatch(tag[1:])),
+        key=lambda tag: version_number(tag[1:]),
+    )
 
 
 def published_versions():
     return {entry["version"]: entry for entry in json.loads(capture("mike", "list", "--json"))}
 
 
-def deploy_release(series, tag):
+def deploy_release(version, tag):
     with TemporaryDirectory() as workspace:
         source = Path(workspace) / "release"
         run("git", "worktree", "add", "--detach", str(source), f"refs/tags/{tag}")
         try:
-            run("mike", "deploy", "--prop-set-string", f"release={tag}", series, cwd=source)
+            run("mike", "deploy", version, cwd=source)
         finally:
             run("git", "worktree", "remove", str(source))
 
@@ -86,14 +84,13 @@ def build(output):
 
     run("mike", "deploy", "--title", "Development", "--allow-empty", "dev")
     published = published_versions()
-    for series, tag in sorted(stable_tags().items(), key=lambda item: version_number(item[0])):
-        previous = published.get(series, {}).get("properties", {}).get("release")
-        if previous and version_number(previous[1:]) >= version_number(tag[1:]):
-            continue
-        deploy_release(series, tag)
+    for tag in stable_tags():
+        version = tag[1:]
+        if version not in published:
+            deploy_release(version, tag)
 
     published = published_versions()
-    stable = [series for series in published if re.fullmatch(r"[0-9]+\.[0-9]+", series)]
+    stable = [version for version in published if STABLE_VERSION.fullmatch(version)]
     version = max(stable, key=version_number, default="dev")
     default = "latest" if stable else "dev"
     if stable and default not in published[version]["aliases"]:

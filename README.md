@@ -46,10 +46,11 @@ mkdocs serve
 Run `mkdocs build --strict` before submitting documentation changes.
 
 The [User Guide workflow](.github/workflows/docs.yml) publishes development
-documentation from `main` and one guide per stable `major.minor` release series
-from `vMAJOR.MINOR.PATCH` tags. The guide opens on the latest stable series,
-or on development documentation until the first stable release. Run the
-workflow on `main` to refresh the site after a publishing failure.
+documentation from `main` and a guide for each stable `vMAJOR.MINOR.PATCH` tag.
+Each stable guide has its own URL, such as `/1.2.3/`, and appears in the version
+selector. The guide opens on the latest stable release, or on development
+documentation until the first stable release. Run the workflow on `main` to
+refresh the site after a publishing failure.
 
 ## License
 
