@@ -26,19 +26,18 @@ Shield LDAP uses the existing Shield user, identity, and login tables.
 
 ## Composer Installation
 
-Register the GitHub repository in the application's **composer.json**, then
-require the current development branch explicitly.
+Once the first stable release is available on Packagist, run this command from
+your application's root directory.
 
 ```console
-composer config repositories.shield-ldap vcs https://github.com/maniaba/shield-ldap
-composer require maniaba/shield-ldap:dev-main
+composer require maniaba/shield-ldap
 ```
 
 To keep the application on the Shield 1.4 release series, use an explicit Shield
 constraint when installing the package.
 
 ```console
-composer require 'codeigniter4/shield:~1.4.1' 'maniaba/shield-ldap:dev-main'
+composer require 'codeigniter4/shield:~1.4.1' maniaba/shield-ldap
 ```
 
 Composer resolves the package against the version constraints in your application.
