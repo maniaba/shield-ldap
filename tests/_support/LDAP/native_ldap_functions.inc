@@ -34,6 +34,7 @@ if (! \extension_loaded('ldap')) {
         'LDAP_OPT_DEREF'              => 2,
         'LDAP_DEREF_NEVER'            => 0,
         'LDAP_OPT_DIAGNOSTIC_MESSAGE' => 50,
+        'LDAP_CONTROL_PAGEDRESULTS'   => '1.2.840.113556.1.4.319',
     ] as $option => $value) {
         define($option, $value);
     }
@@ -111,11 +112,34 @@ function ldap_errno(Connection $connection): int
 /**
  * @param list<string> $attributes
  */
-function ldap_search(Connection $connection, string $base, string $filter, array $attributes, int $attributesOnly, int $sizeLimit, int $timeLimit): false|stdClass
-{
+function ldap_search(
+    Connection $connection,
+    string $base,
+    string $filter,
+    array $attributes,
+    int $attributesOnly,
+    int $sizeLimit,
+    int $timeLimit,
+    int $deref = LDAP_DEREF_NEVER,
+    ?array $controls = null,
+): false|stdClass {
     NativeLDAPStub::$operations[] = ['search', $base];
 
-    return scriptedSearch($base, $filter, $attributes);
+    if ($controls === null) {
+        return scriptedSearch($base, $filter, $attributes);
+    }
+
+    NativeLDAPStub::$pagedRequests[] = compact('base', 'filter', 'attributes', 'sizeLimit', 'controls');
+    $page                            = array_shift(NativeLDAPStub::$pages) ?? ['entries' => []];
+
+    return (object) [
+        'code'      => $page['code'] ?? 0,
+        'entries'   => $page['entries'],
+        'referrals' => $page['referrals'] ?? [],
+        'controls'  => isset($page['cookie']) ? [
+            LDAP_CONTROL_PAGEDRESULTS => ['value' => ['cookie' => $page['cookie']]],
+        ] : [],
+    ];
 }
 
 /**
@@ -144,9 +168,18 @@ function scriptedSearch(string $base, string $filter, array $attributes): false|
     ];
 }
 
-function ldap_parse_result(Connection $connection, stdClass $result, ?int &$code): bool
-{
-    $code = $result->code;
+function ldap_parse_result(
+    Connection $connection,
+    stdClass $result,
+    ?int &$code,
+    ?string &$matchedDn = null,
+    ?string &$message = null,
+    ?array &$referrals = null,
+    ?array &$controls = null,
+): bool {
+    $code      = $result->code;
+    $referrals = $result->referrals ?? [];
+    $controls  = $result->controls ?? [];
 
     return true;
 }

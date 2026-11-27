@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Maniaba\ShieldLDAP\Tests\Authentication\LDAP;
 
 use CodeIgniter\Config\Factories;
+use CodeIgniter\Shield\Authentication\Actions\EmailActivator;
 use CodeIgniter\Shield\Config\Auth;
 use CodeIgniter\Shield\Entities\User;
 use CodeIgniter\Shield\Entities\UserIdentity;
@@ -21,6 +22,7 @@ use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Shield\Models\UserModel;
 use Config\Database;
 use Config\Services;
+use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPConnection;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
 use Maniaba\ShieldLDAP\Tests\DatabaseTestCase;
@@ -154,6 +156,128 @@ final class LDAPUserResolverTest extends DatabaseTestCase
             'user_id' => $userId,
             'type'    => LDAPUserResolver::ID_TYPE,
         ]);
+    }
+
+    public function testSynchronizationPreviewAndApplyProvisionTheSameStableIdentity(): void
+    {
+        $resolver   = new LDAPUserResolver(model(UserModel::class));
+        $connection = $this->syncConnection();
+        $profile    = ['username' => 'Directory.User'];
+
+        $this->assertSame('create', $resolver->synchronize($connection, 'immutable-id', $profile, [], false));
+        $this->dontSeeInDatabase($this->tables['users'], ['username' => 'directory.user']);
+        $this->dontSeeInDatabase($this->tables['identities'], ['type' => LDAPUserResolver::ID_TYPE]);
+
+        $this->assertSame('create', $resolver->synchronize($connection, 'immutable-id', $profile, [], true));
+        $user = $resolver->resolve('corporate', 'immutable-id');
+        $this->assertSame('directory.user', $user->username);
+        $this->assertNull($user->password_hash);
+        $this->assertSame('unchanged', $resolver->synchronize($connection, 'immutable-id', $profile, [], true));
+        $this->seeNumRecords(1, $this->tables['identities'], ['user_id' => $user->id, 'type' => LDAPUserResolver::ID_TYPE]);
+    }
+
+    public function testSynchronizationUpdatesTheLinkedUserAndPreservesLocalCredentialsAndGroups(): void
+    {
+        $users      = model(UserModel::class);
+        $resolver   = new LDAPUserResolver($users);
+        $connection = $this->syncConnection(provisionUsers: false);
+        $userId     = $users->insert($users->createNewUser([
+            'username' => 'original',
+            'email'    => 'local@example.test',
+            'password' => 'local-password',
+        ]));
+        $user = $resolver->link('corporate', 'immutable-id', $userId);
+        $user->addGroup('admin');
+
+        $this->assertSame('update', $resolver->synchronize($connection, 'immutable-id', ['username' => 'renamed'], [], false));
+        $this->assertSame('original', $resolver->resolve('corporate', 'immutable-id')->username);
+        $this->assertSame('update', $resolver->synchronize($connection, 'immutable-id', ['username' => 'renamed'], [], true));
+        $updated = $resolver->resolve('corporate', 'immutable-id');
+
+        $this->assertSame($userId, $updated->id);
+        $this->assertSame('renamed', $updated->username);
+        $this->assertSame('local@example.test', $updated->email);
+        $this->assertTrue(password_verify('local-password', $updated->password_hash));
+        $this->assertSame(['admin'], $updated->getGroups());
+    }
+
+    public function testSynchronizationHonorsConnectionProvisioningAndUpdatePolicies(): void
+    {
+        $resolver   = new LDAPUserResolver(model(UserModel::class));
+        $connection = $this->syncConnection(provisionUsers: false, updateProfile: false);
+        $resolver->resolve('corporate', 'linked-id', ['username' => 'original'], true);
+
+        $this->assertSame('skipped', $resolver->synchronize($connection, 'unlinked-id', ['username' => 'unlinked'], [], true));
+        $this->assertSame('skipped', $resolver->synchronize($connection, 'linked-id', ['username' => 'renamed'], [], true));
+        $this->assertSame('original', $resolver->resolve('corporate', 'linked-id')->username);
+        $this->dontSeeInDatabase($this->tables['users'], ['username' => 'unlinked']);
+    }
+
+    public function testSynchronizationSkipsReservedLocalIdsAndDirectoryUsernames(): void
+    {
+        $resolver   = new LDAPUserResolver(model(UserModel::class));
+        $connection = $this->syncConnection();
+        $local      = $resolver->resolve('corporate', 'local-id', ['username' => 'local'], true);
+        $regular    = $resolver->resolve('corporate', 'regular-id', ['username' => 'regular'], true);
+        $reserved   = ['emergency' => $local->id];
+
+        $this->assertSame('skipped', $resolver->synchronize($connection, 'local-id', ['username' => 'attempted'], $reserved, true));
+        $this->assertSame('skipped', $resolver->synchronize($connection, 'regular-id', ['username' => 'Emergency'], $reserved, true));
+        $this->assertSame('skipped', $resolver->synchronize($connection, 'new-id', ['username' => 'Emergency'], $reserved, true));
+        $this->assertSame('local', $resolver->resolve('corporate', 'local-id')->username);
+        $this->assertSame($regular->username, $resolver->resolve('corporate', 'regular-id')->username);
+        $this->dontSeeInDatabase($this->tables['users'], ['username' => 'emergency']);
+    }
+
+    public function testSynchronizationLeavesBannedAndInactiveUsersUnchanged(): void
+    {
+        $users      = model(UserModel::class);
+        $resolver   = new LDAPUserResolver($users);
+        $connection = $this->syncConnection();
+        $banned     = $resolver->resolve('corporate', 'banned-id', ['username' => 'banned'], true);
+        $resolver->resolve('corporate', 'inactive-id', ['username' => 'inactive'], true);
+        $users->update($banned->id, ['status' => 'banned', 'active' => true]);
+
+        $auth                      = config(Auth::class);
+        $auth->actions['register'] = EmailActivator::class;
+
+        $this->assertSame('skipped', $resolver->synchronize($connection, 'banned-id', ['username' => 'renamed'], [], true));
+        $this->assertSame('skipped', $resolver->synchronize($connection, 'inactive-id', ['username' => 'renamed'], [], true));
+        $this->assertTrue($resolver->resolve('corporate', 'banned-id')->isBanned());
+        $this->assertFalse($resolver->resolve('corporate', 'inactive-id')->isActivated());
+        $this->dontSeeInDatabase($this->tables['users'], ['username' => 'renamed']);
+    }
+
+    public function testSynchronizationRejectsAnUnlinkedLocalUsernameInPreviewAndOnApply(): void
+    {
+        $users      = model(UserModel::class);
+        $resolver   = new LDAPUserResolver($users);
+        $connection = $this->syncConnection();
+        $users->insert(['username' => 'Existing']);
+
+        foreach ([false, true] as $apply) {
+            try {
+                $resolver->synchronize($connection, 'immutable-id', ['username' => 'existing'], [], $apply);
+                $this->fail('A colliding username was accepted.');
+            } catch (LDAPException $exception) {
+                $this->assertSame('identity_conflict', $exception->reason);
+            }
+        }
+
+        $this->dontSeeInDatabase($this->tables['identities'], ['type' => LDAPUserResolver::ID_TYPE]);
+    }
+
+    public function testSynchronizationPreviewRejectsAnUnwritableProfileField(): void
+    {
+        $resolver = new LDAPUserResolver(model(UserModel::class));
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('invalid_profile');
+
+        $resolver->synchronize($this->syncConnection(), 'immutable-id', [
+            'username'   => 'directory',
+            'first_name' => 'First',
+        ], [], false);
     }
 
     public function testCannotMoveAnExistingDirectoryIdentityToAnotherUser(): void
@@ -519,5 +643,18 @@ final class LDAPUserResolverTest extends DatabaseTestCase
         $bytes = hex2bin('785634123412cdab891023456789abcd');
 
         $this->assertSame('12345678-1234-abcd-8910-23456789abcd', LDAPUserResolver::normalizeObjectGuid($bytes));
+    }
+
+    private function syncConnection(bool $provisionUsers = true, bool $updateProfile = true): LDAPConnection
+    {
+        return new LDAPConnection(
+            id: 'corporate',
+            hosts: ['directory.example.test'],
+            baseDn: 'dc=example,dc=test',
+            bindDn: 'cn=reader,dc=example,dc=test',
+            bindPassword: 'test-secret',
+            provisionUsers: $provisionUsers,
+            updateProfile: $updateProfile,
+        );
     }
 }

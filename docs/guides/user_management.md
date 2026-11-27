@@ -43,6 +43,36 @@ profile field such as `directory_email`.
     contact identity verified by your application or an action that supports
     directory-only users. [Shield authentication actions](https://github.com/codeigniter4/shield/blob/develop/docs/references/authentication/auth_actions.md)
 
+## Synchronizing Users from LDAP
+
+Run the command from a trusted administrative shell. Preview the changes for
+the `corporate` connection, then apply them after reviewing the results.
+
+```console
+php spark shield:ldap-sync corporate
+php spark shield:ldap-sync corporate --apply
+```
+
+The command uses the connection's service account over verified TLS. The
+directory must support LDAP paged results. The search combines `loginFilter`
+and `eligibilityFilter` across the configured user search bases. When
+`userBaseDn` is omitted, the search uses `baseDn`.
+
+Synchronization uses the same profile mapping and per-connection policies as
+sign-in. Enable `provisionUsers` to create accounts for eligible directory
+entries and map `username` in `profileAttributes`. Set `updateProfile` to
+`false` to apply mappings only when creating an account. The command skips
+reserved local accounts and uses the immutable directory identifier for
+existing links. Resolve a username collision through a verified account link.
+[Linking an Existing Shield User](#linking-an-existing-shield-user)
+
+The command requires a complete directory scan before applying any writes.
+Review duplicate identities and username conflicts in the output. Each user's
+changes are committed in a separate transaction, and the command reports a
+summary. If a run is interrupted, rerun the command from the beginning.
+Existing links identify users already processed. Synchronization changes only
+users represented in the directory scan.
+
 ## Linking an Existing Shield User
 
 During migration, start with provisioning disabled. You can keep LDAP web
