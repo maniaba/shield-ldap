@@ -239,6 +239,33 @@ final class LDAPLinkCommandTest extends DatabaseTestCase
         $this->assertNoDirectoryLink();
     }
 
+    public function testBulkApplyRevalidatesTheSameAccountAfterAUsernameCaseChange(): void
+    {
+        $alice   = $this->createUser('alice');
+        $users   = model(UserModel::class);
+        $lookups = [];
+
+        $this->directory->expects($this->exactly(2))->method('lookupUser')->willReturnCallback(
+            function (LDAPConnection $connection, array|string $baseDn, string $filter) use ($alice, $users, &$lookups): array {
+                $lookups[] = $filter;
+
+                if (count($lookups) === 1) {
+                    $users->update($alice->id, ['username' => 'Alice']);
+                }
+
+                return $this->directoryEntry();
+            },
+        );
+
+        $this->assertSame(EXIT_SUCCESS, service('commands')->run(self::COMMAND, ['corporate', 'all' => null, 'apply' => null]));
+        $this->assertSame([
+            '(&(objectClass=person)(sAMAccountName=alice))',
+            '(&(objectClass=person)(sAMAccountName=Alice))',
+        ], $lookups);
+        $this->assertStringContainsString('linked=1 skipped=0 conflicts=0', $this->getStreamFilterBuffer());
+        $this->assertSame($alice->id, (new LDAPUserResolver($users))->resolve('corporate', self::GUID)->id);
+    }
+
     public function testBulkApplyRejectsDuplicateDirectoryIds(): void
     {
         $this->createUser('bob');

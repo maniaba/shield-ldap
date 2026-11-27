@@ -14,17 +14,24 @@ declare(strict_types=1);
 namespace Maniaba\ShieldLDAP\Exceptions;
 
 use CodeIgniter\Shield\Exceptions\RuntimeException;
+use Throwable;
 
 /**
  * Reports LDAP failures using sanitized diagnostic reason codes.
  */
 final class LDAPException extends RuntimeException
 {
+    public readonly string $reason;
+    public readonly ?LDAPReason $kind;
+
     /**
-     * Localizes the message for the supplied diagnostic reason code.
+     * Localizes the failure and retains any underlying operational error.
      */
-    public function __construct(public readonly string $reason)
+    public function __construct(LDAPReason|string $reason, ?Throwable $previous = null)
     {
-        parent::__construct(lang('ShieldLDAP.operationFailed', [$reason]));
+        $this->kind   = $reason instanceof LDAPReason ? $reason : LDAPReason::tryFrom($reason);
+        $this->reason = $reason instanceof LDAPReason ? $reason->value : $reason;
+
+        parent::__construct(lang('ShieldLDAP.operationFailed', [$this->reason]), 0, $previous);
     }
 }

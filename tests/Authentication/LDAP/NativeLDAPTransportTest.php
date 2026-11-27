@@ -344,6 +344,47 @@ final class NativeLDAPTransportTest extends TestCase
         $this->assertSame(1, NativeLDAPStub::$unbound);
     }
 
+    public function testClosingAScanImmediatelyReleasesItsConnectionWithTheIteratorStillHeld(): void
+    {
+        NativeLDAPStub::$pages = [
+            ['entries' => [self::FIRST_ENTRY_DN], 'cookie' => 'first-page'],
+            ['entries' => [self::SECOND_ENTRY_DN], 'cookie' => ''],
+        ];
+
+        $scan     = (new NativeLDAPDirectory())->scanUsers($this->scanConnection(), 1);
+        $iterator = $scan->getIterator();
+        $this->assertSame([], NativeLDAPStub::$connected);
+
+        $iterator->rewind();
+        $this->assertSame(self::FIRST_ENTRY_DN, $iterator->current()['dn']);
+        $this->assertSame(0, NativeLDAPStub::$unbound);
+
+        $scan->close();
+        $this->assertSame(1, NativeLDAPStub::$unbound);
+
+        $scan->close();
+        $iterator->next();
+        $this->assertFalse($iterator->valid());
+        $this->assertSame([], iterator_to_array($scan));
+        $this->assertCount(1, NativeLDAPStub::$pagedRequests);
+        $this->assertSame(1, NativeLDAPStub::$unbound);
+    }
+
+    public function testScanReportsThePageLimitAndReleasesTheConnection(): void
+    {
+        NativeLDAPStub::$pages = array_fill(0, 10_000, ['entries' => [], 'cookie' => 'continuation']);
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('scan_limit_exceeded');
+
+        try {
+            iterator_to_array((new NativeLDAPDirectory())->scanUsers($this->scanConnection(), 1));
+        } finally {
+            $this->assertCount(10_000, NativeLDAPStub::$pagedRequests);
+            $this->assertSame(1, NativeLDAPStub::$unbound);
+        }
+    }
+
     /**
      * @param array{entries: list<string>, cookie?: int|string, code?: int, referrals?: list<string>} $page
      */

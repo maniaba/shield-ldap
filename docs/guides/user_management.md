@@ -35,6 +35,11 @@ unmapped fields and Shield's password and email identities under
 application control. Store directory contact information in a dedicated
 profile field such as `directory_email`.
 
+LDAP provisioning assigns Shield's configured `AuthGroups.defaultGroup` to new
+users, as Shield's `shield:user create` does. Provisioning does not trigger the
+web `register` event. A successful LDAP sign-in still triggers Shield's
+standard login event.
+
 !!! note
 
     Shield may require a local activation step. When registration activation is

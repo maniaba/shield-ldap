@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Maniaba\ShieldLDAP\Tests\Commands;
 
 use CodeIgniter\Config\Factories;
+use CodeIgniter\Events\Events;
 use CodeIgniter\Shield\Authentication\Authenticators\Session;
 use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Shield\Models\UserModel;
@@ -83,7 +84,19 @@ final class LDAPSyncCommandTest extends DatabaseTestCase
         $this->assertNull($users->findByCredentials(['username' => 'alice']));
         $this->assertSame('oldname', $users->findById($id)?->username);
 
-        $this->assertSame(EXIT_SUCCESS, service('commands')->run(self::COMMAND, ['corporate', 'apply' => null]));
+        $unexpectedEvent = static function (): void {
+            self::fail('Administrative provisioning triggered a web authentication event.');
+        };
+        Events::on('register', $unexpectedEvent);
+        Events::on('login', $unexpectedEvent);
+
+        try {
+            $this->assertSame(EXIT_SUCCESS, service('commands')->run(self::COMMAND, ['corporate', 'apply' => null]));
+        } finally {
+            Events::removeListener('register', $unexpectedEvent);
+            Events::removeListener('login', $unexpectedEvent);
+        }
+
         $this->assertStringContainsString('created=1 updated=1', $this->getStreamFilterBuffer());
         $this->assertSame('alice', $resolver->resolve('corporate', 'new-id')->username);
         $this->assertSame($id, $resolver->resolve('corporate', 'existing-id')->id);

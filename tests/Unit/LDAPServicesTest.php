@@ -13,8 +13,13 @@ declare(strict_types=1);
 
 namespace Maniaba\ShieldLDAP\Tests\Unit;
 
+use CodeIgniter\Shield\Models\UserModel;
+use Config\Services as ApplicationServices;
+use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPDirectoryInterface;
 use Maniaba\ShieldLDAP\Authentication\LDAP\NativeLDAPDirectory;
 use Maniaba\ShieldLDAP\Config\Services;
+use Maniaba\ShieldLDAP\Exceptions\LDAPException;
+use Maniaba\ShieldLDAP\Exceptions\LDAPReason;
 use Maniaba\ShieldLDAP\Tests\TestCase;
 
 /**
@@ -41,5 +46,35 @@ final class LDAPServicesTest extends TestCase
         $this->assertNotSame($first, $second);
         $this->assertNotSame($first, $shared);
         $this->assertNotSame($second, $shared);
+    }
+
+    public function testUsesTheConfiguredTransportForAdministrativeServices(): void
+    {
+        $directory = Services::ldapDirectory();
+
+        $this->assertSame($directory, service('ldapUserLookup'));
+        $this->assertSame($directory, service('ldapUserEnumeration'));
+    }
+
+    public function testRejectsALookupTransportWithoutTheCapability(): void
+    {
+        ApplicationServices::injectMock('ldapDirectory', $this->createStub(LDAPDirectoryInterface::class));
+
+        try {
+            service('ldapUserLookup');
+            $this->fail('The transport lacks the lookup capability.');
+        } catch (LDAPException $exception) {
+            $this->assertSame(LDAPReason::InvalidConfiguration, $exception->kind);
+        }
+    }
+
+    public function testResolverWithExplicitProviderIsIndependentOfTheSharedResolver(): void
+    {
+        $provider = $this->createStub(UserModel::class);
+        $shared   = service('ldapUserResolver');
+
+        $this->assertSame($shared, service('ldapUserResolver'));
+        $this->assertNotSame($shared, service('ldapUserResolver', $provider));
+        $this->assertSame($shared, service('ldapUserResolver'));
     }
 }
