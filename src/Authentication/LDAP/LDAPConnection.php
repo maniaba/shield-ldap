@@ -29,24 +29,24 @@ final readonly class LDAPConnection
     /**
      * Validate the directory settings and bind credential.
      *
-     * @param array<int, string>    $hosts
-     * @param list<string>|string   $baseDn
-     * @param array<int, string>    $loginAttributes
-     * @param array<string, string> $profileAttributes Local user field to LDAP attribute
+     * @param array<int, string>       $hosts
+     * @param list<string>|string|null $userBaseDn
+     * @param array<int, string>       $loginAttributes
+     * @param array<string, string>    $profileAttributes Local user field to LDAP attribute
      *
      * @throws LDAPException If the connection settings are invalid.
      */
     public function __construct(
         public string $id,
         public array $hosts,
-        public array|string $baseDn,
+        public string $baseDn,
         public string $bindDn,
         string $bindPassword,
         public string $encryption = 'ldaps',
         public ?int $port = null,
         public int $connectTimeout = 5,
         public int $searchTimeout = 5,
-        public ?string $userBaseDn = null,
+        public array|string|null $userBaseDn = null,
         public string $loginFilter = '(objectClass=person)',
         public array $loginAttributes = ['uid'],
         public string $externalIdAttribute = 'entryUUID',

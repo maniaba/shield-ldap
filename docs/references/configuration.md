@@ -23,14 +23,14 @@ is called. Use `connectionIds()` to list configured IDs.
 | Option | Default | Description |
 | --- | --- | --- |
 | `hosts` | Required | Ordered list of 1 to 10 hostnames or IP addresses. Specify IPv6 addresses without brackets. |
-| `baseDn` | Required | A base DN or an ordered list of 1 to 10 base DNs. See [Multiple Search Bases](../getting_started/configuration.md#multiple-search-bases). |
+| `baseDn` | Required | Root DN of the directory as a string. |
 | `bindDn` | Required | DN of the read-only lookup account. |
 | `bindPassword` | Required | Nonempty service-account password. Use an [environment override](../getting_started/configuration.md#environment-overrides) or an [application-owned provider](diagnostics.md#custom-connection-providers). |
 | `encryption` | `'ldaps'` | Use `'ldaps'` or `'starttls'`. |
 | `port` | `null` | Integer from 1 to 65535. With `null`, LDAPS uses 636 and StartTLS uses 389. |
 | `connectTimeout` | `5` | Network connection timeout in seconds, from 1 to 60. |
 | `searchTimeout` | `5` | LDAP operation and search time limit in seconds, from 1 to 60. |
-| `userBaseDn` | `null` | A single base DN that overrides `baseDn` for user lookups. With `null`, lookups use `baseDn`. |
+| `userBaseDn` | `null` | A single DN or an ordered list of 1 to 10 DNs for user lookups. With `null`, lookups use `baseDn`. See [Multiple Search Bases](../getting_started/configuration.md#multiple-search-bases). |
 | `loginFilter` | `'(objectClass=person)'` | Trusted LDAP filter for the initial user lookup. |
 | `loginAttributes` | `['uid']` | List of 1 to 10 LDAP attributes accepted as a login identifier. The directory evaluates equality using its schema rules. |
 | `externalIdAttribute` | `'entryUUID'` | Immutable, single-valued LDAP attribute used to link the Shield user. Use `objectGUID` for Active Directory. |

@@ -129,22 +129,22 @@ and the [configuration reference](../references/configuration.md).
 
 ## Multiple Search Bases
 
-Set `baseDn` to a list of up to 10 distinguished names to search more than one
-subtree in a directory. For example, add these settings to the `corporate`
-connection to search two sibling organizational units in Active Directory.
+Set `userBaseDn` to a list of 1 to 10 distinguished names to configure the user
+search bases. For example, add these settings to the `corporate` connection to
+search two sibling organizational units in Active Directory.
 
 ```php
-'baseDn' => [
+'baseDn'     => 'DC=example,DC=com',
+'userBaseDn' => [
     'OU=Employees,DC=example,DC=com',
     'OU=Contractors,DC=example,DC=com',
 ],
-'userBaseDn' => null,
 ```
 
-Set `userBaseDn` to `null` or omit it to use the list. A string `userBaseDn`
-overrides `baseDn` for user searches. The service account needs permission to
-search each configured base. The native transport checks for a single match
-across the selected bases before it verifies the password. See the
+Use a string `userBaseDn` for a single user search base. If you omit it or set
+it to `null`, user searches use the root DN in `baseDn`. The service account
+needs permission to search each selected base. The native transport checks for
+a single match across the selected bases before it verifies the password. See the
 [configuration reference](../references/configuration.md#login-and-eligibility-filters).
 
 ## Environment Overrides

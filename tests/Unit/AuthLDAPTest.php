@@ -69,21 +69,23 @@ final class AuthLDAPTest extends TestCase
     }
 
     /**
-     * @param list<string> $baseDns
+     * @param list<string> $userBaseDns
      */
-    #[DataProvider('provideAcceptsOrderedBaseDnLists')]
-    public function testAcceptsOrderedBaseDnLists(array $baseDns): void
+    #[DataProvider('provideAcceptsOrderedUserBaseDnLists')]
+    public function testAcceptsOrderedUserBaseDnLists(array $userBaseDns): void
     {
         $config              = new AuthLDAP();
-        $config->connections = ['corporate' => ['baseDn' => $baseDns] + self::CONNECTION_METADATA];
+        $config->connections = ['corporate' => ['userBaseDn' => $userBaseDns] + self::CONNECTION_METADATA];
+        $connection          = $config->getConnection('corporate');
 
-        $this->assertSame($baseDns, $config->getConnection('corporate')->baseDn);
+        $this->assertSame(self::CONNECTION_METADATA['baseDn'], $connection->baseDn);
+        $this->assertSame($userBaseDns, $connection->userBaseDn);
     }
 
     /**
      * @return iterable<string, array{list<string>}>
      */
-    public static function provideAcceptsOrderedBaseDnLists(): iterable
+    public static function provideAcceptsOrderedUserBaseDnLists(): iterable
     {
         yield 'single base DN' => [['ou=users,dc=example,dc=test']];
 
@@ -214,19 +216,25 @@ final class AuthLDAPTest extends TestCase
 
         yield 'base DN with NUL byte' => [['baseDn' => "dc=example\0,dc=test"]];
 
-        yield 'empty base DN list' => [['baseDn' => []]];
+        yield 'list used as base DN' => [['baseDn' => ['dc=example,dc=test']]];
 
-        yield 'too many base DNs' => [['baseDn' => array_fill(0, 11, 'dc=example,dc=test')]];
+        yield 'blank user base DN' => [['userBaseDn' => '   ']];
 
-        yield 'associative base DNs' => [['baseDn' => ['people' => 'dc=example,dc=test']]];
+        yield 'user base DN with NUL byte' => [['userBaseDn' => "dc=example\0,dc=test"]];
 
-        yield 'non-contiguous base DN indexes' => [['baseDn' => [0 => 'ou=people,dc=example,dc=test', 2 => 'ou=employees,dc=example,dc=test']]];
+        yield 'empty user base DN list' => [['userBaseDn' => []]];
 
-        yield 'numeric base DN entry' => [['baseDn' => [123]]];
+        yield 'too many user base DNs' => [['userBaseDn' => array_fill(0, 11, 'dc=example,dc=test')]];
 
-        yield 'blank base DN entry' => [['baseDn' => ['dc=example,dc=test', '   ']]];
+        yield 'associative user base DNs' => [['userBaseDn' => ['people' => 'dc=example,dc=test']]];
 
-        yield 'base DN entry with NUL byte' => [['baseDn' => ["dc=example\0,dc=test"]]];
+        yield 'non-contiguous user base DN indexes' => [['userBaseDn' => [0 => 'ou=people,dc=example,dc=test', 2 => 'ou=employees,dc=example,dc=test']]];
+
+        yield 'numeric user base DN entry' => [['userBaseDn' => [123]]];
+
+        yield 'blank user base DN entry' => [['userBaseDn' => ['dc=example,dc=test', '   ']]];
+
+        yield 'user base DN entry with NUL byte' => [['userBaseDn' => ["dc=example\0,dc=test"]]];
     }
 
     public function testRejectsUnknownConnectionId(): void

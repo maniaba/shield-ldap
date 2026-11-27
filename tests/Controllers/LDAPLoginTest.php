@@ -86,7 +86,7 @@ final class LDAPLoginTest extends DatabaseTestCase
 
     public function testDirectoryLoginUsesShieldSessionAndDoesNotRememberPassword(): void
     {
-        $this->directory->expects($this->once())->method('authenticate')->willReturn($this->entry());
+        $this->directory->expects($this->once())->method('authenticate')->with($this->isInstanceOf(LDAPConnection::class), 'dc=example,dc=com')->willReturn($this->entry());
 
         $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret', 'remember' => '1']);
 
@@ -103,13 +103,13 @@ final class LDAPLoginTest extends DatabaseTestCase
         $this->assertNull(session('_ci_old_input'));
     }
 
-    public function testDirectoryLoginPassesConfiguredBaseDnsToASupportingDirectory(): void
+    public function testDirectoryLoginPassesConfiguredUserBaseDnsToASupportingDirectory(): void
     {
-        $baseDns                                      = ['ou=employees,dc=example,dc=com', 'ou=contractors,dc=example,dc=com'];
-        $this->ldap->connections['example']['baseDn'] = $baseDns;
-        $directory                                    = $this->createMock(MultiBaseLDAPDirectoryInterface::class);
+        $userBaseDns                                      = ['ou=employees,dc=example,dc=com', 'ou=contractors,dc=example,dc=com'];
+        $this->ldap->connections['example']['userBaseDn'] = $userBaseDns;
+        $directory                                        = $this->createMock(MultiBaseLDAPDirectoryInterface::class);
         Services::injectMock('ldapDirectory', $directory);
-        $directory->expects($this->once())->method('authenticate')->with($this->isInstanceOf(LDAPConnection::class), $baseDns)->willReturn($this->entry());
+        $directory->expects($this->once())->method('authenticate')->with($this->isInstanceOf(LDAPConnection::class), $userBaseDns)->willReturn($this->entry());
 
         $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
 
@@ -120,7 +120,6 @@ final class LDAPLoginTest extends DatabaseTestCase
     public function testExplicitUserBaseDnTakesPrecedenceWithALegacyDirectory(): void
     {
         $userBaseDn                                       = 'ou=users,dc=example,dc=com';
-        $this->ldap->connections['example']['baseDn']     = ['ou=employees,dc=example,dc=com', 'ou=contractors,dc=example,dc=com'];
         $this->ldap->connections['example']['userBaseDn'] = $userBaseDn;
         $this->directory->expects($this->once())->method('authenticate')->with($this->isInstanceOf(LDAPConnection::class), $userBaseDn)->willReturn($this->entry());
 
@@ -130,9 +129,9 @@ final class LDAPLoginTest extends DatabaseTestCase
         $this->assertSame('directory-user', auth('session')->user()?->username);
     }
 
-    public function testLegacyDirectoryRejectsABaseDnListWithoutSearching(): void
+    public function testLegacyDirectoryRejectsAUserBaseDnListWithoutSearching(): void
     {
-        $this->ldap->connections['example']['baseDn'] = ['ou=employees,dc=example,dc=com', 'ou=contractors,dc=example,dc=com'];
+        $this->ldap->connections['example']['userBaseDn'] = ['ou=employees,dc=example,dc=com', 'ou=contractors,dc=example,dc=com'];
         $this->directory->expects($this->never())->method('authenticate');
 
         $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
