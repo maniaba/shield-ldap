@@ -27,11 +27,17 @@ final readonly class LDAPConnection
     private Closure $readBindPassword;
 
     /**
+     * @var array<string, int|string> Canonical AD GUID to existing Shield user ID.
+     */
+    public array $accountLinks;
+
+    /**
      * Validate the directory settings and bind credential.
      *
-     * @param array<int, string>    $hosts
-     * @param array<int, string>    $loginAttributes
-     * @param array<string, string> $profileAttributes Local user field to LDAP attribute
+     * @param array<int, string>      $hosts
+     * @param array<int, string>      $loginAttributes
+     * @param array<string, string>   $profileAttributes Local user field to LDAP attribute
+     * @param array<array-key, mixed> $accountLinks      Existing user IDs keyed by AD objectGUID
      *
      * @throws LDAPException If the connection settings are invalid.
      */
@@ -53,6 +59,7 @@ final readonly class LDAPConnection
         public bool $provisionUsers = false,
         public string $eligibilityFilter = '(objectClass=*)',
         public bool $updateProfile = true,
+        array $accountLinks = [],
     ) {
         if (preg_match('/\A[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}\z/', $id) !== 1
             || $hosts === [] || count($hosts) > 10 || ! array_is_list($hosts)
@@ -64,6 +71,7 @@ final readonly class LDAPConnection
             || array_filter($hosts, is_string(...)) !== $hosts
             || array_filter($loginAttributes, is_string(...)) !== $loginAttributes
             || array_filter($profileAttributes, is_string(...)) !== $profileAttributes
+            || ($accountLinks !== [] && strcasecmp($externalIdAttribute, 'objectGUID') !== 0)
         ) {
             throw new LDAPException('invalid_configuration');
         }
@@ -92,6 +100,25 @@ final readonly class LDAPConnection
         foreach ([$externalIdAttribute, ...$loginAttributes, ...array_values($profileAttributes)] as $attribute) {
             LDAPFilter::validateAttribute($attribute);
         }
+
+        $links = [];
+
+        foreach ($accountLinks as $guid => $userId) {
+            if (! is_string($guid) || preg_match('/\A[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\z/i', $guid) !== 1
+                                   || ((! is_int($userId) || $userId < 1) && (! is_string($userId) || trim($userId) === ''))
+            ) {
+                throw new LDAPException('invalid_configuration');
+            }
+
+            $guid = strtolower($guid);
+            if (isset($links[$guid])) {
+                throw new LDAPException('invalid_configuration');
+            }
+
+            $links[$guid] = $userId;
+        }
+
+        $this->accountLinks = $links;
 
         // A closure keeps the secret out of JSON, var_export(), and serialization.
         $this->readBindPassword = static fn (): string => $bindPassword;

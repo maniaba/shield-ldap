@@ -94,6 +94,86 @@ final class LDAPUserResolverTest extends DatabaseTestCase
         $this->dontSeeInDatabase($this->tables['identities'], ['type' => LDAPUserResolver::ID_TYPE]);
     }
 
+    public function testConfiguredLinkUsesAnExistingAccountWithProvisioningDisabled(): void
+    {
+        $users    = model(UserModel::class);
+        $resolver = new LDAPUserResolver($users);
+        $guid     = '00112233-4455-6677-8899-aabbccddeeff';
+        $userId   = $users->insert(['username' => 'legacy']);
+
+        $linked = $resolver->resolve(
+            'corporate',
+            $guid,
+            ['username' => 'directory'],
+            updateProfile: false,
+            existingUserId: $userId,
+        );
+
+        $this->assertSame((string) $userId, (string) $linked->id);
+        $this->assertSame('legacy', $linked->username);
+        $this->assertSame($linked->id, $resolver->resolve('corporate', $guid, existingUserId: $userId)->id);
+        $this->assertSame($linked->id, $resolver->resolve('corporate', $guid)->id);
+        $this->seeNumRecords(1, $this->tables['identities'], ['type' => LDAPUserResolver::ID_TYPE]);
+        $this->dontSeeInDatabase($this->tables['users'], ['username' => 'directory']);
+    }
+
+    public function testConfiguredLinkCannotReassignAnExistingIdentity(): void
+    {
+        $users    = model(UserModel::class);
+        $resolver = new LDAPUserResolver($users);
+        $guid     = '00112233-4455-6677-8899-aabbccddeeff';
+        $owner    = $resolver->resolve('corporate', $guid, ['username' => 'directory'], true);
+        $otherId  = $users->insert(['username' => 'another']);
+
+        try {
+            $resolver->resolve('corporate', $guid, existingUserId: $otherId);
+            $this->fail('The configured link moved an existing directory identity.');
+        } catch (LDAPException $exception) {
+            $this->assertSame('identity_conflict', $exception->reason);
+        }
+
+        $this->assertSame($owner->id, $resolver->resolve('corporate', $guid)->id);
+        $this->dontSeeInDatabase($this->tables['identities'], [
+            'user_id' => $otherId,
+            'type'    => LDAPUserResolver::ID_TYPE,
+        ]);
+    }
+
+    public function testConfiguredLinkCannotProvisionInPlaceOfAMissingUser(): void
+    {
+        $resolver = new LDAPUserResolver(model(UserModel::class));
+        $guid     = '00112233-4455-6677-8899-aabbccddeeff';
+
+        try {
+            $resolver->resolve('corporate', $guid, ['username' => 'directory'], true, existingUserId: 42);
+            $this->fail('Provisioning was used in place of the missing linked account.');
+        } catch (LDAPException $exception) {
+            $this->assertSame('identity_conflict', $exception->reason);
+        }
+
+        $this->dontSeeInDatabase($this->tables['users'], ['username' => 'directory']);
+        $this->dontSeeInDatabase($this->tables['identities'], ['type' => LDAPUserResolver::ID_TYPE]);
+    }
+
+    public function testConfiguredLinkRollsBackWhenTheProfileConflicts(): void
+    {
+        $users    = model(UserModel::class);
+        $resolver = new LDAPUserResolver($users);
+        $guid     = '00112233-4455-6677-8899-aabbccddeeff';
+        $userId   = $users->insert(['username' => 'legacy']);
+        $users->insert(['username' => 'claimed']);
+
+        try {
+            $resolver->resolve('corporate', $guid, ['username' => 'claimed'], existingUserId: $userId);
+            $this->fail('The configured link accepted another user\'s username.');
+        } catch (LDAPException $exception) {
+            $this->assertSame('identity_conflict', $exception->reason);
+        }
+
+        $this->seeInDatabase($this->tables['users'], ['id' => $userId, 'username' => 'legacy']);
+        $this->dontSeeInDatabase($this->tables['identities'], ['type' => LDAPUserResolver::ID_TYPE]);
+    }
+
     public function testCustomProviderCanSynchronizeAWritableProfileColumn(): void
     {
         $users = new class () extends UserModel {

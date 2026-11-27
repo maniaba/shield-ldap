@@ -77,6 +77,10 @@ authldap.enabled = true
 authldap.connections.corporate.bindPassword = 'replace-with-service-account-password'
 ```
 
+For a migration that reuses existing Shield users, configure [Active Directory
+account links](../guides/user_management.md#linking-active-directory-at-sign-in)
+using their verified GUIDs and Shield user IDs.
+
 ## OpenLDAP
 
 For an OpenLDAP server with StartTLS, use the following **app/Config/AuthLDAP.php**.

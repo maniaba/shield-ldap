@@ -38,6 +38,8 @@ final class LDAPLoginTest extends DatabaseTestCase
 {
     use FeatureTestTrait;
 
+    private const DIRECTORY_GUID = '00112233-4455-6677-8899-aabbccddeeff';
+
     protected $refresh = true;
     private User $user;
     private AuthLDAP $ldap;
@@ -289,6 +291,93 @@ final class LDAPLoginTest extends DatabaseTestCase
 
         $response->assertSessionMissing('error');
         $this->assertSame($this->user->id, auth('session')->id());
+    }
+
+    #[DataProvider('provideConfiguredDirectoryGuidLinksExistingUserAndPersistsThroughRename')]
+    public function testConfiguredDirectoryGuidLinksExistingUserAndPersistsThroughRename(bool $provisionUsers): void
+    {
+        $this->configureActiveDirectory([strtoupper(self::DIRECTORY_GUID) => $this->user->id], $provisionUsers);
+        $this->directory->expects($this->exactly(2))->method('authenticate')->willReturn(
+            $this->activeDirectoryEntry($this->user->username),
+            $this->activeDirectoryEntry('renamed-user'),
+        );
+
+        $response = $this->post('/login', ['username' => $this->user->username, 'password' => 'directory-secret']);
+
+        $response->assertSessionMissing('error');
+        $this->assertSame($this->user->id, auth('session')->id());
+        $this->seeInDatabase($this->tables['identities'], ['type' => LDAPUserResolver::ID_TYPE, 'user_id' => $this->user->id]);
+
+        auth('session')->logout();
+        Services::resetSingle('auth');
+        unset($this->ldap->connections['example']['accountLinks']);
+
+        $response = $this->post('/login', ['username' => 'renamed-user', 'password' => 'directory-secret']);
+
+        $response->assertSessionMissing('error');
+        $this->assertSame($this->user->id, auth('session')->id());
+        $this->assertSame('renamed-user', auth('session')->user()?->username);
+        $this->seeNumRecords(1, $this->tables['identities'], ['type' => LDAPUserResolver::ID_TYPE]);
+    }
+
+    /**
+     * @return iterable<string, array{bool}>
+     */
+    public static function provideConfiguredDirectoryGuidLinksExistingUserAndPersistsThroughRename(): iterable
+    {
+        yield 'provisioning enabled' => [true];
+
+        yield 'provisioning disabled' => [false];
+    }
+
+    public function testUnmappedDirectoryGuidDoesNotLinkByUsername(): void
+    {
+        $this->configureActiveDirectory([]);
+        $this->directory->expects($this->once())->method('authenticate')->willReturn($this->activeDirectoryEntry($this->user->username));
+
+        $response = $this->post('/login', ['username' => $this->user->username, 'password' => 'directory-secret']);
+
+        $response->assertSessionHas('error', lang('Auth.badAttempt'));
+        $this->assertFalse(auth('session')->loggedIn());
+        $this->dontSeeInDatabase($this->tables['identities'], ['type' => LDAPUserResolver::ID_TYPE]);
+    }
+
+    public function testInvalidDirectoryCredentialsCannotCreateConfiguredGuidLink(): void
+    {
+        $this->configureActiveDirectory([self::DIRECTORY_GUID => $this->user->id]);
+        $this->directory->expects($this->once())->method('authenticate')->willThrowException(new LDAPException('invalid_credentials'));
+
+        $response = $this->post('/login', ['username' => $this->user->username, 'password' => 'incorrect']);
+
+        $response->assertSessionHas('error', lang('Auth.badAttempt'));
+        $this->assertFalse(auth('session')->loggedIn());
+        $this->dontSeeInDatabase($this->tables['identities'], ['type' => LDAPUserResolver::ID_TYPE]);
+    }
+
+    /**
+     * @param array<string, int|string> $accountLinks
+     */
+    private function configureActiveDirectory(array $accountLinks, bool $provisionUsers = true): void
+    {
+        $this->ldap->connections['example']['loginAttributes']     = ['sAMAccountName'];
+        $this->ldap->connections['example']['externalIdAttribute'] = 'objectGUID';
+        $this->ldap->connections['example']['profileAttributes']   = ['username' => 'sAMAccountName'];
+        $this->ldap->connections['example']['provisionUsers']      = $provisionUsers;
+        $this->ldap->connections['example']['accountLinks']        = $accountLinks;
+    }
+
+    /**
+     * @return array{dn: string, attributes: array<string, list<string>>}
+     */
+    private function activeDirectoryEntry(string $username): array
+    {
+        return [
+            'dn'         => 'cn=' . $username . ',dc=example,dc=com',
+            'attributes' => [
+                'samaccountname' => [$username],
+                'objectguid'     => ["\x33\x22\x11\x00\x55\x44\x77\x66\x88\x99\xaa\xbb\xcc\xdd\xee\xff"],
+            ],
+        ];
     }
 
     /**

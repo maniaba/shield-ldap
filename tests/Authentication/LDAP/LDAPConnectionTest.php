@@ -23,6 +23,65 @@ use PHPUnit\Framework\TestCase;
  */
 final class LDAPConnectionTest extends TestCase
 {
+    public function testNormalizesConfiguredObjectGuidAccountLinks(): void
+    {
+        $connection = new LDAPConnection(
+            'corporate',
+            ['ldap.example.test'],
+            'dc=example,dc=test',
+            'cn=reader,dc=example,dc=test',
+            'readerPassword!',
+            externalIdAttribute: 'ObjectGUID',
+            accountLinks: [
+                '00112233-4455-6677-8899-AABBCCDDEEFF' => 42,
+                '10213243-5465-7687-98A9-BACBDCEDFE0F' => '43',
+            ],
+        );
+
+        $this->assertSame([
+            '00112233-4455-6677-8899-aabbccddeeff' => 42,
+            '10213243-5465-7687-98a9-bacbdcedfe0f' => '43',
+        ], $connection->accountLinks);
+    }
+
+    /**
+     * @param array<string, int|string> $accountLinks
+     */
+    #[DataProvider('provideRejectsInvalidAccountLinks')]
+    public function testRejectsInvalidAccountLinks(string $externalIdAttribute, array $accountLinks): void
+    {
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('invalid_configuration');
+
+        new LDAPConnection(
+            'corporate',
+            ['ldap.example.test'],
+            'dc=example,dc=test',
+            'cn=reader,dc=example,dc=test',
+            'readerPassword!',
+            externalIdAttribute: $externalIdAttribute,
+            accountLinks: $accountLinks,
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string, array<string, int|string>}>
+     */
+    public static function provideRejectsInvalidAccountLinks(): iterable
+    {
+        $guid = '00112233-4455-6677-8899-aabbccddeeff';
+
+        yield 'external ID attribute other than objectGUID' => ['entryUUID', [$guid => 42]];
+
+        yield 'invalid GUID' => ['objectGUID', ['legacy.user' => 42]];
+
+        yield 'duplicate GUID after normalizing' => ['objectGUID', [$guid => 42, strtoupper($guid) => 43]];
+
+        yield 'nonpositive user ID' => ['objectGUID', [$guid => 0]];
+
+        yield 'blank user ID' => ['objectGUID', [$guid => '   ']];
+    }
+
     #[DataProvider('provideAcceptsBoundaryValues')]
     public function testAcceptsBoundaryValues(int $port, int $timeout, int $hostCount): void
     {

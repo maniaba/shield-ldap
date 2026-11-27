@@ -228,6 +228,7 @@ class LDAP extends Session
             $profile,
             $connection->provisionUsers,
             $connection->updateProfile,
+            existingUserId: $connection->accountLinks[$externalId] ?? null,
         );
     }
 

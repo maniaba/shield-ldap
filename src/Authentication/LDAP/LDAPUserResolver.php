@@ -44,6 +44,7 @@ final readonly class LDAPUserResolver
      *
      * Profile keys must be explicitly mapped to writable UserModel columns.
      * LDAP contact addresses cannot modify the local email/password identity.
+     * An existing user ID must come from a trusted, explicit directory mapping.
      *
      * @param array<string, string|null> $profile
      */
@@ -53,14 +54,15 @@ final readonly class LDAPUserResolver
         array $profile = [],
         bool $provision = false,
         bool $updateProfile = true,
+        int|string|null $existingUserId = null,
     ): User {
         $key     = $this->identityKey($connectionId, $externalId);
         $profile = $this->validateProfile($profile);
 
-        return $this->atomically(function () use ($connectionId, $key, $profile, $provision, $updateProfile): User {
+        return $this->atomically(function () use ($connectionId, $key, $profile, $provision, $updateProfile, $existingUserId): User {
             $identity = $this->identities->getIdentityBySecret(self::ID_TYPE, $key);
 
-            if ($identity === null) {
+            if ($identity === null && $existingUserId === null) {
                 if (! $provision) {
                     throw new LDAPException('user_not_provisioned');
                 }
@@ -83,8 +85,21 @@ final readonly class LDAPUserResolver
                 return $user;
             }
 
-            $user = $this->findUser($identity->user_id);
-            if (! $updateProfile || $user->isBanned() || ! $user->isActivated()) {
+            $userId = $identity->user_id ?? $existingUserId;
+            if ($userId === null || ($existingUserId !== null && (string) $userId !== (string) $existingUserId)) {
+                throw new LDAPException('identity_conflict');
+            }
+
+            $user = $this->findUser($userId);
+            if ($user->isBanned() || ! $user->isActivated()) {
+                return $user;
+            }
+
+            if ($identity === null) {
+                $this->createIdentity($connectionId, $key, $userId);
+            }
+
+            if (! $updateProfile) {
                 return $user;
             }
 
@@ -101,12 +116,12 @@ final readonly class LDAPUserResolver
             }
 
             if (isset($profile['username'])) {
-                $this->checkUsername($profile['username'], $identity->user_id);
+                $this->checkUsername($profile['username'], $userId);
             }
 
-            $this->users->update($identity->user_id, $profile);
+            $this->users->update($userId, $profile);
 
-            return $this->readBackProfile($identity->user_id, $profile);
+            return $this->readBackProfile($userId, $profile);
         });
     }
 

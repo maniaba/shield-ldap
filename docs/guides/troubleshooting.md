@@ -70,11 +70,14 @@ eligibility. An identifier must resolve to exactly one entry.
   Directory, the expected `objectGUID` is a 16-byte value.
 - `user_not_provisioned` means the entry has no Shield identity link and
   provisioning is off. Follow the [account linking procedure](user_management.md#linking-an-existing-shield-user).
-- For `identity_conflict`, `invalid_profile`, or
-  `synchronization_conflict`, check for a username collision, multi-valued
-  attributes, and profile fields permitted by the user provider. The
-  user model and identity model must share the same Shield database
-  connection.
+- If an existing username causes `identity_conflict` during provisioning,
+  verify the owner's directory account and link it to the existing Shield
+  user by GUID. Also check whether an `accountLinks` entry disagrees with a
+  stored link. [Linking Active Directory at Sign-in](user_management.md#linking-active-directory-at-sign-in)
+- For `invalid_profile` or `synchronization_conflict`, check for multi-valued
+  attributes and confirm that the profile fields are permitted by the user
+  provider. The user model and identity model must share the same Shield
+  database connection.
 - If directory credentials pass, also check the local Shield user for a
   ban or pending activation. If sign-in reaches a login action, verify
   that its routes and the required user contact identity are configured.

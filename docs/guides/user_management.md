@@ -45,10 +45,48 @@ profile field such as `directory_email`.
 
 ## Linking an Existing Shield User
 
-During migration, start with provisioning disabled. In a trusted operator
-workflow, verify the directory account and select the Shield user who owns
-it. Then create the link using the verified external identifier and
-selected Shield user ID.
+### Linking Active Directory at Sign-in
+
+Use `accountLinks` to associate an Active Directory account with an existing
+Shield user. Obtain the `objectGUID` from the directory configured for the
+connection. This example reads it from a known user object with the
+ActiveDirectory PowerShell module. [Get-ADUser](https://learn.microsoft.com/en-us/powershell/module/activedirectory/get-aduser)
+
+```powershell
+(Get-ADUser -Identity 'CN=Alex Rivera,OU=Users,DC=example,DC=com' -Server 'dc01.example.com' -Properties objectGUID).ObjectGUID.ToString()
+```
+
+Verify that the directory account belongs to the person who owns the existing
+Shield account. For a migration from another LDAP directory, use the Shield
+user ID already associated with that person's previous LDAP account. Add the
+verified GUID and Shield user ID to the new Active Directory connection in
+**app/Config/AuthLDAP.php**.
+
+```php
+'externalIdAttribute' => 'objectGUID',
+'accountLinks'        => [
+    '00112233-4455-6677-8899-aabbccddeeff' => 42,
+],
+'provisionUsers'      => false,
+```
+
+Use GUIDs in hyphenated form. Hexadecimal letters can be uppercase or
+lowercase. After the directory verifies the user's password and eligibility,
+Shield LDAP stores the link to user `42`. The map uses the verified GUID as
+its lookup key, so the AD username can differ from the existing Shield username.
+Set `provisionUsers` to `false` during the migration to restrict LDAP sign-ins
+to accounts with existing links or verified mappings.
+
+The stored link is used on later sign-ins, including after you remove its map
+entry. A map entry targeting a different Shield user than the stored link
+blocks sign-in. Profile updates continue to follow `updateProfile`, including
+uniqueness checks on mapped usernames.
+
+### Linking from Application Code
+
+In a trusted operator workflow, verify the directory account and select the
+Shield user who owns it. Create the link using the verified external identifier
+and selected Shield user ID.
 
 ```php
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;
