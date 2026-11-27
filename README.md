@@ -30,27 +30,8 @@ is available in this repository.
 
 ## Contributing
 
-Run the package tests with `composer test` and the code style and static checks
-with `composer ci`. Run `composer test:ldap` for the native OpenLDAP integration
-suite. See [Testing](docs/references/testing.md) for requirements and commands.
-
-Preview the User Guide with MkDocs Material.
-
-```console
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements-docs.txt
-mkdocs serve
-```
-
-Run `mkdocs build --strict` before submitting documentation changes.
-
-The [User Guide workflow](.github/workflows/docs.yml) publishes development
-documentation from `main` and a guide for each stable `vMAJOR.MINOR.PATCH` tag.
-Each stable guide has its own URL, such as `/1.2.3/`, and appears in the version
-selector. The guide opens on the latest stable release, or on development
-documentation until the first stable release. Run the workflow on `main` to
-refresh the site after a publishing failure.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests, documentation, and pull
+request guidelines.
 
 ## License
 
