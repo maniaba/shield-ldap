@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 /**
- * This file is part of CodeIgniter Shield.
+ * This file is part of Shield LDAP.
  *
- * (c) CodeIgniter Foundation <admin@codeigniter.com>
+ * Copyright (c) 2026 maniaba
+ * SPDX-License-Identifier: MIT
  *
- * For the full copyright and license information, please view
- * the LICENSE file that was distributed with this source code.
+ * See the LICENSE file for the full copyright and license information.
  */
 
 namespace Maniaba\ShieldLDAP\Authentication\LDAP;
@@ -21,7 +21,7 @@ use Maniaba\ShieldLDAP\Exceptions\LDAPException;
 interface LDAPDirectoryInterface
 {
     /**
-     * Check that the configured endpoint can establish and verify TLS.
+     * Check that the endpoint can establish TLS under the configured certificate policy.
      *
      * @throws LDAPException If no configured endpoint completes the TLS check.
      */
@@ -36,10 +36,12 @@ interface LDAPDirectoryInterface
 
     /**
      * Search for one user, verify their password, and apply the eligibility filter.
+     * If syncGroupsOnLogin is enabled and groupMappings has entries, return the verified Shield group keys as
+     * matchedGroups, including an empty list when the user matches no groups.
      *
      * @param list<string> $attributes
      *
-     * @return array{dn: string, attributes: array<string, list<string>>} Attribute names are lowercase.
+     * @return array{dn: string, attributes: array<string, list<string>>, matchedGroups?: list<string>} Attribute names are lowercase.
      *
      * @throws LDAPException If the directory cannot verify one eligible user.
      */

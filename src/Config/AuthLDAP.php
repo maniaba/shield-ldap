@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 /**
- * This file is part of CodeIgniter Shield.
+ * This file is part of Shield LDAP.
  *
- * (c) CodeIgniter Foundation <admin@codeigniter.com>
+ * Copyright (c) 2026 maniaba
+ * SPDX-License-Identifier: MIT
  *
- * For the full copyright and license information, please view
- * the LICENSE file that was distributed with this source code.
+ * See the LICENSE file for the full copyright and license information.
  */
 
 namespace Maniaba\ShieldLDAP\Config;
@@ -16,6 +16,7 @@ namespace Maniaba\ShieldLDAP\Config;
 use CodeIgniter\Config\BaseConfig;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPConnection;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
+use Maniaba\ShieldLDAP\Exceptions\LDAPReason;
 use Throwable;
 
 /**
@@ -34,8 +35,8 @@ class AuthLDAP extends BaseConfig
     public string $defaultConnection = '';
 
     /**
-     * Directory settings keyed by connection ID. Declare bindPassword to allow
-     * CodeIgniter to override it through authldap.connections.<id>.bindPassword.
+     * Directory settings keyed by connection ID. Declare options in the array
+     * to allow CodeIgniter overrides through authldap.connections.<id>.<option>.
      *
      * @var array<string, array<string, mixed>>
      */
@@ -46,11 +47,15 @@ class AuthLDAP extends BaseConfig
         //     'bindDn'              => 'CN=shield-reader,OU=Service Accounts,DC=example,DC=com',
         //     'bindPassword'        => '',
         //     'encryption'          => 'ldaps',
+        //     'verifyCertificate'   => true,
         //     'userBaseDn'          => 'OU=Users,DC=example,DC=com',
         //     'loginFilter'         => '(&(objectCategory=person)(objectClass=user))',
         //     'loginAttributes'     => ['sAMAccountName', 'userPrincipalName'],
         //     'externalIdAttribute' => 'objectGUID',
         //     'profileAttributes'   => ['username' => 'sAMAccountName'],
+        //     'groupMappings'       => ['user' => 'CN=Users Group,OU=Groups,DC=example,DC=com'],
+        //     'syncGroupsOnLogin'   => true,
+        //     'syncProfileOnLogin'  => true,
         // ],
     ];
 
@@ -63,6 +68,23 @@ class AuthLDAP extends BaseConfig
      * @var array<string, int|string> Case-insensitive login identifier to expected local user ID.
      */
     public array $localAccounts = [];
+
+    /**
+     * Table names for Shield LDAP persistence.
+     *
+     * @var array{ldap_group_grants: string}
+     */
+    public array $tables = [
+        'ldap_group_grants' => 'shield_ldap_group_grants',
+    ];
+
+    /**
+     * Resolve the tracking table, preferring the application's Shield configuration.
+     */
+    public function getGroupGrantsTable(): string
+    {
+        return config('Auth')->tables['ldap_group_grants'] ?? $this->tables['ldap_group_grants'];
+    }
 
     /**
      * Retrieve the settings for the specified connection ID.
@@ -79,7 +101,7 @@ class AuthLDAP extends BaseConfig
             || ! isset($settings['hosts'], $settings['baseDn'], $settings['bindDn'])
             || array_filter($settings, is_string(...), ARRAY_FILTER_USE_KEY) !== $settings
         ) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
         try {
@@ -93,7 +115,7 @@ class AuthLDAP extends BaseConfig
             );
         } catch (Throwable $exception) {
             // The constructor received the raw bind password as an argument.
-            throw new LDAPException($exception instanceof LDAPException ? $exception->reason : 'invalid_configuration');
+            throw new LDAPException($exception instanceof LDAPException ? $exception->reason : LDAPReason::InvalidConfiguration);
         }
     }
 

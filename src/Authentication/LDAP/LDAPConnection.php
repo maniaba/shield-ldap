@@ -3,18 +3,19 @@
 declare(strict_types=1);
 
 /**
- * This file is part of CodeIgniter Shield.
+ * This file is part of Shield LDAP.
  *
- * (c) CodeIgniter Foundation <admin@codeigniter.com>
+ * Copyright (c) 2026 maniaba
+ * SPDX-License-Identifier: MIT
  *
- * For the full copyright and license information, please view
- * the LICENSE file that was distributed with this source code.
+ * See the LICENSE file for the full copyright and license information.
  */
 
 namespace Maniaba\ShieldLDAP\Authentication\LDAP;
 
 use Closure;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
+use Maniaba\ShieldLDAP\Exceptions\LDAPReason;
 
 /**
  * Immutable settings and a bind credential for an LDAP directory.
@@ -29,9 +30,11 @@ final readonly class LDAPConnection
     /**
      * Validate the directory settings and bind credential.
      *
-     * @param array<int, string>    $hosts
-     * @param array<int, string>    $loginAttributes
-     * @param array<string, string> $profileAttributes Local user field to LDAP attribute
+     * @param array<int, string>         $hosts
+     * @param list<string>|string|null   $userBaseDn
+     * @param array<int, string>         $loginAttributes
+     * @param array<string, string>      $profileAttributes Local user field to LDAP attribute
+     * @param array<string, string>|null $groupMappings     Shield group key to LDAP group DN
      *
      * @throws LDAPException If the connection settings are invalid.
      */
@@ -45,7 +48,7 @@ final readonly class LDAPConnection
         public ?int $port = null,
         public int $connectTimeout = 5,
         public int $searchTimeout = 5,
-        public ?string $userBaseDn = null,
+        public array|string|null $userBaseDn = null,
         public string $loginFilter = '(objectClass=person)',
         public array $loginAttributes = ['uid'],
         public string $externalIdAttribute = 'entryUUID',
@@ -53,7 +56,13 @@ final readonly class LDAPConnection
         public bool $provisionUsers = false,
         public string $eligibilityFilter = '(objectClass=*)',
         public bool $updateProfile = true,
+        public bool $verifyCertificate = true,
+        public ?array $groupMappings = null,
+        public bool $syncGroupsOnLogin = true,
+        public bool $syncProfileOnLogin = true,
     ) {
+        $mappings = $groupMappings ?? [];
+
         if (preg_match('/\A[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}\z/', $id) !== 1
             || $hosts === [] || count($hosts) > 10 || ! array_is_list($hosts)
             || ! in_array($encryption, ['ldaps', 'starttls'], true)
@@ -64,26 +73,29 @@ final readonly class LDAPConnection
             || array_filter($hosts, is_string(...)) !== $hosts
             || array_filter($loginAttributes, is_string(...)) !== $loginAttributes
             || array_filter($profileAttributes, is_string(...)) !== $profileAttributes
+            || array_filter($mappings, is_string(...)) !== $mappings
+            || array_filter($mappings, is_string(...), ARRAY_FILTER_USE_KEY) !== $mappings
         ) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
         foreach ($hosts as $host) {
             if (filter_var($host, FILTER_VALIDATE_IP) === false
                 && filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false
             ) {
-                throw new LDAPException('invalid_endpoint');
+                throw new LDAPException(LDAPReason::InvalidEndpoint);
             }
         }
 
-        foreach ([$baseDn, $userBaseDn ?? $baseDn, $bindDn] as $dn) {
-            if (trim($dn) === '' || str_contains($dn, "\0")) {
-                throw new LDAPException('invalid_configuration');
-            }
+        if (! self::isValidBaseDn($baseDn)
+            || ! self::isValidBaseDn($bindDn)
+            || ($userBaseDn !== null && ! self::isValidBaseDn($userBaseDn))
+        ) {
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
         if ($bindPassword === '' || str_contains($bindPassword, "\0")) {
-            throw new LDAPException('invalid_bind_secret');
+            throw new LDAPException(LDAPReason::InvalidBindSecret);
         }
 
         LDAPFilter::validate($loginFilter);
@@ -93,8 +105,38 @@ final readonly class LDAPConnection
             LDAPFilter::validateAttribute($attribute);
         }
 
+        foreach ($mappings as $group => $dn) {
+            if (trim($group) === '' || strtolower($group) !== $group || ! self::isValidBaseDn($dn)) {
+                throw new LDAPException(LDAPReason::InvalidConfiguration);
+            }
+        }
+
         // A closure keeps the secret out of JSON, var_export(), and serialization.
         $this->readBindPassword = static fn (): string => $bindPassword;
+    }
+
+    /**
+     * Check a single search base or a bounded list of search bases.
+     *
+     * @param array<array-key, mixed>|string $baseDn
+     *
+     * @internal
+     */
+    public static function isValidBaseDn(array|string $baseDn): bool
+    {
+        $bases = (array) $baseDn;
+
+        if ($bases === [] || count($bases) > 10 || ! array_is_list($bases)) {
+            return false;
+        }
+
+        foreach ($bases as $dn) {
+            if (! is_string($dn) || trim($dn) === '' || str_contains($dn, "\0")) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

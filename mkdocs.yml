@@ -2,7 +2,7 @@ site_name: Shield LDAP
 site_description: LDAP and Active Directory authentication for CodeIgniter Shield
 site_url: https://maniaba.github.io/shield-ldap/
 repo_url: https://github.com/maniaba/shield-ldap
-edit_uri: edit/main/docs/
+edit_uri: edit/develop/docs/
 strict: true
 
 exclude_docs: |
@@ -75,6 +75,10 @@ nav:
     - Login Eligibility: guides/login_eligibility.md
     - User Management: guides/user_management.md
     - Troubleshooting: guides/troubleshooting.md
+  - Commands:
+    - Overview: commands/index.md
+    - Link Existing Users: commands/ldap-link.md
+    - Synchronize Users: commands/ldap-sync.md
   - References:
     - Configuration Reference: references/configuration.md
     - Directory Diagnostics: references/diagnostics.md

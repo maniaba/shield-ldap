@@ -35,6 +35,11 @@ unmapped fields and Shield's password and email identities under
 application control. Store directory contact information in a dedicated
 profile field such as `directory_email`.
 
+LDAP provisioning assigns Shield's configured `AuthGroups.defaultGroup` to new
+users, as Shield's `shield:user create` does. Provisioning does not trigger the
+web `register` event. A successful LDAP sign-in still triggers Shield's
+standard login event.
+
 !!! note
 
     Shield may require a local activation step. When registration activation is
@@ -43,11 +48,23 @@ profile field such as `directory_email`.
     contact identity verified by your application or an action that supports
     directory-only users. [Shield authentication actions](https://github.com/codeigniter4/shield/blob/develop/docs/references/authentication/auth_actions.md)
 
+## Synchronizing Users from LDAP
+
+Use `shield:ldap-sync` from a trusted administrative shell to preview and apply
+provisioning and mapped profile updates in bulk.
+[Synchronize Users](../commands/ldap-sync.md)
+
 ## Linking an Existing Shield User
 
-During migration, start with provisioning disabled. In a trusted operator
-workflow, verify the directory account and select the Shield user who owns
-it. Then create the link using the verified external identifier and
+During migration, start with provisioning disabled. You can keep LDAP web
+sign-in disabled while using `shield:ldap-link` to preview and link accounts by
+username from a trusted administrative shell.
+[Link Existing Users](../commands/ldap-link.md)
+
+### Linking from Application Code
+
+In an application workflow, verify the directory account and select the Shield
+user who owns it. Create the link using the verified external identifier and
 selected Shield user ID.
 
 ```php
@@ -85,22 +102,42 @@ A reserved identifier is matched case-insensitively and checked against the
 named local Shield account. Configure a Shield login MFA action for each
 reserved operator and confirm they can complete it during an LDAP outage.
 The authenticator requires a pending login action for a reserved account
-before establishing a session. Every other identifier is checked by the
-selected LDAP directory. Rejected directory credentials and outages both
-deny a new LDAP login.
+before establishing a session and issues remember-me tokens only for directory
+accounts. Every other identifier is checked by the selected LDAP directory.
+Rejected directory credentials and outages both deny a new LDAP login.
+
+Revoke pre-migration remember-me tokens for reserved local accounts before
+enabling remembered sign-ins.
 
 ## Authorization
 
-Directory group filters control who may sign in. Manage groups and
-permissions with [Shield authorization](https://github.com/codeigniter4/shield/blob/develop/docs/references/authorization.md),
-including assignment of any groups your application requires for new users.
+Directory group filters control who may sign in. Configure connection-level
+[`groupMappings`](../getting_started/configuration.md#map-ldap-groups-to-shield-groups)
+to grant existing [Shield groups](https://shield.codeigniter.com/latest/references/authorization/)
+to eligible users during LDAP password sign-in. The mapping applies to both
+provisioned users and existing linked users, including when `updateProfile`
+is disabled.
+
+To refresh groups and profiles independently of sign-in, see
+[Move Sign-In Updates to Scheduled Commands](../commands/ldap-sync.md#move-sign-in-updates-to-scheduled-commands).
+
+When group synchronization runs, the connection withdraws grants
+for groups the user has left or whose mappings were removed. If several
+connections have granted the same group, the assignment remains until each
+of those connections withdraws its grant on a subsequent sign-in.
+
+Shield LDAP records only the group rows it creates. Existing manual
+assignments and Shield's default group stay under Shield's control, including
+manual assignments that overlap a mapping. To take manual ownership of a group
+already granted by LDAP, remove and re-add it in Shield. Shield's `addGroup()`
+method leaves an existing assignment as it is.
 
 ## Account Disabling and Password Recovery
 
 Directory eligibility is checked during password login. When disabling an
 account in the directory, use your application's established procedures to
-revoke its existing Shield sessions and API tokens when immediate access
-removal is required.
+revoke its existing Shield sessions, API tokens, and remember-me tokens when
+immediate access removal is required.
 
 The authenticator uses the submitted directory password for verification.
 Shield stores the directory identity link and the mapped profile fields. A
@@ -109,7 +146,9 @@ Shield's `force-reset` filter to users with a Shield
 email/password identity if your Shield version requires that identity for a
 reset check. [Shield force-reset compatibility](https://github.com/codeigniter4/shield/pull/1411)
 
-For an LDAP-only application, review existing remember-me cookies and
-alternative login paths during migration. The LDAP authenticator issues no
-remember-me token. Keep Shield's `allowRemembering` disabled and revoke
-pre-migration tokens according to your application's policies.
+[Remembered sign-ins](../quick_start_guide/using_ldap_auth.md#remembered-sign-ins)
+are restored by Shield using the token and local user record, without rebinding
+to LDAP or checking the user's current status in the directory. Shield rotates
+the token on restoration and revokes the user's remember-me tokens on logout.
+To revoke a user's remember-me tokens from an administrator workflow, pass the
+user to `auth('session')->getAuthenticator()->forget($user)`.

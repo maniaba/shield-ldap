@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 /**
- * This file is part of CodeIgniter Shield.
+ * This file is part of Shield LDAP.
  *
- * (c) CodeIgniter Foundation <admin@codeigniter.com>
+ * Copyright (c) 2026 maniaba
+ * SPDX-License-Identifier: MIT
  *
- * For the full copyright and license information, please view
- * the LICENSE file that was distributed with this source code.
+ * See the LICENSE file for the full copyright and license information.
  */
 
 namespace Maniaba\ShieldLDAP\Tests\Authentication\LDAP\Integration;
@@ -57,6 +57,92 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
         yield 'LDAPS' => ['ldaps'];
     }
 
+    public function testAuthenticatesOneUserAcrossMultipleSearchBases(): void
+    {
+        $entry = (new NativeLDAPDirectory())->authenticate(
+            $this->connection(),
+            [self::GROUP_BASE_DN, self::BASE_DN, self::USER_BASE_DN],
+            '(uid=alice)',
+            ['uid'],
+            'alicePassword!',
+        );
+
+        $this->assertSame('uid=alice,' . self::USER_BASE_DN, $entry['dn']);
+        $this->assertSame(['alice'], $entry['attributes']['uid']);
+    }
+
+    public function testReadsDirectGroupMembershipsFromTheConfiguredGroupEntries(): void
+    {
+        $connection = $this->connection(groupMappings: [
+            'user'      => 'CN=SHIELD-USERS,' . self::GROUP_BASE_DN,
+            'developer' => 'cn=shield-developers,' . self::GROUP_BASE_DN,
+            'nested'    => 'cn=shield-nested,' . self::GROUP_BASE_DN,
+            'container' => self::GROUP_BASE_DN,
+        ]);
+        $directory = new NativeLDAPDirectory();
+
+        $alice = $directory->authenticate($connection, self::USER_BASE_DN, '(uid=alice)', [], 'alicePassword!');
+        $bob   = $directory->authenticate($connection, self::USER_BASE_DN, '(uid=bob)', [], 'bobPassword!');
+
+        $this->assertSame(['user', 'developer'], $alice['matchedGroups']);
+        $this->assertSame([], $bob['matchedGroups']);
+    }
+
+    public function testLooksUpAnEligibleDirectoryIdentityForLinking(): void
+    {
+        $connection = $this->connection();
+        $directory  = new NativeLDAPDirectory();
+        $baseDns    = [self::GROUP_BASE_DN, self::BASE_DN, self::USER_BASE_DN];
+
+        $entry = $directory->lookupUser($connection, $baseDns, '(uid=alice)', '(objectClass=person)');
+
+        $this->assertSame('uid=alice,' . self::USER_BASE_DN, $entry['dn']);
+        $this->assertSame(['entryuuid'], array_keys($entry['attributes']));
+        $this->assertMatchesRegularExpression('/\A[a-f0-9-]{36}\z/', $entry['attributes']['entryuuid'][0]);
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('ineligible_user');
+
+        $directory->lookupUser($connection, $baseDns, '(uid=alice)', '(uid=bob)');
+    }
+
+    public function testScansEligibleUsersAcrossMultiplePages(): void
+    {
+        $entries = iterator_to_array((new NativeLDAPDirectory())->scanUsers($this->connection(), 1));
+
+        $this->assertEqualsCanonicalizing([
+            'uid=alice,' . self::USER_BASE_DN,
+            'uid=bob,' . self::USER_BASE_DN,
+        ], array_column($entries, 'dn'));
+
+        foreach ($entries as $entry) {
+            $this->assertSame(['entryuuid'], array_keys($entry['attributes']));
+            $this->assertMatchesRegularExpression('/\A[a-f0-9-]{36}\z/', $entry['attributes']['entryuuid'][0]);
+        }
+    }
+
+    public function testScansMappedGroupMembershipsWhenLoginGroupSyncIsDisabled(): void
+    {
+        $connection = $this->connection(
+            groupMappings: ['user' => 'cn=shield-users,' . self::GROUP_BASE_DN],
+            syncGroupsOnLogin: false,
+        );
+        $directory = new NativeLDAPDirectory();
+        $login     = $directory->authenticate($connection, self::USER_BASE_DN, '(uid=alice)', ['uid'], 'alicePassword!');
+        $this->assertSame(['alice'], $login['attributes']['uid']);
+        $this->assertArrayNotHasKey('matchedGroups', $login);
+
+        $entries = iterator_to_array($directory->scanGroupMemberships($connection, 1));
+        $groups  = array_column($entries, 'matchedGroups', 'dn');
+
+        $this->assertSame(['user'], $groups['uid=alice,' . self::USER_BASE_DN]);
+        $this->assertSame([], $groups['uid=bob,' . self::USER_BASE_DN]);
+
+        foreach ($entries as $entry) {
+            $this->assertSame(['entryuuid'], array_keys($entry['attributes']));
+        }
+    }
+
     public function testRejectsWrongCertificateHostname(): void
     {
         $host = getenv('SHIELD_LDAP_TEST_WRONG_HOST');
@@ -90,6 +176,49 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
         $this->expectExceptionMessage('certificate_verification_failed');
 
         (new NativeLDAPDirectory())->testConnection($connection);
+    }
+
+    #[RunInSeparateProcess]
+    public function testStartTlsCertificateVerificationOverrideIsScopedToOneConnection(): void
+    {
+        $directory  = new NativeLDAPDirectory();
+        $connection = $this->connection(verifyCertificate: false);
+
+        if (PHP_VERSION_ID < 80322 || (PHP_VERSION_ID >= 80400 && PHP_VERSION_ID < 80408)) {
+            $this->expectException(LDAPException::class);
+            $this->expectExceptionMessage('tls_verification_override_unsupported');
+
+            $directory->testBind($connection);
+
+            return;
+        }
+
+        $ca = getenv('SHIELD_LDAP_TEST_UNTRUSTED_CA');
+
+        if ($ca === false || $ca === '') {
+            $this->markTestSkipped('Set SHIELD_LDAP_TEST_UNTRUSTED_CA to another CA bundle to test certificate trust.');
+        }
+
+        putenv('LDAPTLS_CACERT=' . $ca);
+        putenv('LDAPTLS_CACERTDIR=');
+
+        $entry = $directory->authenticate($connection, self::USER_BASE_DN, '(uid=alice)', ['uid'], 'alicePassword!');
+        $this->assertSame(['alice'], $entry['attributes']['uid']);
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('certificate_verification_failed');
+
+        $directory->testConnection($this->connection());
+    }
+
+    public function testRejectsCertificateVerificationOverrideForLdaps(): void
+    {
+        $connection = $this->connection('ldaps', verifyCertificate: false);
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('tls_verification_override_unsupported');
+
+        (new NativeLDAPDirectory())->testBind($connection);
     }
 
     public function testRejectsAmbiguousSearchBeforeCheckingPassword(): void
@@ -197,10 +326,16 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
     }
 
     /**
-     * @param list<string> $hosts
+     * @param list<string>          $hosts
+     * @param array<string, string> $groupMappings
      */
-    private function connection(string $encryption = 'starttls', array $hosts = ['127.0.0.1']): LDAPConnection
-    {
+    private function connection(
+        string $encryption = 'starttls',
+        array $hosts = ['127.0.0.1'],
+        bool $verifyCertificate = true,
+        array $groupMappings = [],
+        bool $syncGroupsOnLogin = true,
+    ): LDAPConnection {
         $port = getenv($encryption === 'ldaps' ? 'SHIELD_LDAP_TEST_LDAPS_PORT' : 'SHIELD_LDAP_TEST_PORT');
 
         if (! extension_loaded('ldap') || $port === false || ! ctype_digit($port)) {
@@ -215,6 +350,9 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
             'readerPassword!',
             $encryption,
             (int) $port,
+            verifyCertificate: $verifyCertificate,
+            groupMappings: $groupMappings,
+            syncGroupsOnLogin: $syncGroupsOnLogin,
         );
     }
 }

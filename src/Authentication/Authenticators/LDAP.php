@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 /**
- * This file is part of CodeIgniter Shield.
+ * This file is part of Shield LDAP.
  *
- * (c) CodeIgniter Foundation <admin@codeigniter.com>
+ * Copyright (c) 2026 maniaba
+ * SPDX-License-Identifier: MIT
  *
- * For the full copyright and license information, please view
- * the LICENSE file that was distributed with this source code.
+ * See the LICENSE file for the full copyright and license information.
  */
 
 namespace Maniaba\ShieldLDAP\Authentication\Authenticators;
@@ -23,16 +23,16 @@ use CodeIgniter\Shield\Result;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPDirectoryInterface;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPFilter;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;
+use Maniaba\ShieldLDAP\Authentication\LDAP\MultiBaseLDAPDirectoryInterface;
 use Maniaba\ShieldLDAP\Config\AuthLDAP;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
+use Maniaba\ShieldLDAP\Exceptions\LDAPReason;
 
 /**
  * Uses verified LDAP identities with Shield's session and login action lifecycle.
  */
 class LDAP extends Session
 {
-    private const DUMMY_PASSWORD_HASH = '$2y$12$lGwEWbbJHNlNehaFdwrcH.e7c0S3L2sMFVZr6LX/IHjU0ONwWzogq';
-
     private readonly AuthLDAP $ldapConfig;
     private readonly LDAPDirectoryInterface $directory;
     private readonly LDAPUserResolver $resolver;
@@ -57,11 +57,11 @@ class LDAP extends Session
 
         $this->ldapConfig    = $config ?? config('AuthLDAP');
         $this->directory     = $directory ?? service('ldapDirectory');
-        $this->resolver      = $resolver ?? new LDAPUserResolver($provider);
+        $this->resolver      = $resolver ?? service('ldapUserResolver', $provider);
         $this->localAccounts = array_change_key_case($this->ldapConfig->localAccounts);
 
         if (count($this->localAccounts) !== count($this->ldapConfig->localAccounts)) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
     }
 
@@ -100,14 +100,22 @@ class LDAP extends Session
         }
 
         $this->recordAttempt($identifier, $user);
+        if (! $pending) {
+            parent::login($user);
+
+            return $result;
+        }
+
         $this->startLogin($user);
 
         if ($local && ($identity = $user->getEmailIdentity()) !== null) {
             $user->touchIdentity($identity);
         }
 
-        if (! $pending) {
-            $this->completeLogin($user);
+        // Match Session::attempt() by issuing the token before the login action completes.
+        if (! $local && $this->shouldRemember && setting('Auth.sessionConfig')['allowRemembering']) {
+            $this->rememberUser($user);
+            $this->remember(false);
         }
 
         return $result;
@@ -182,7 +190,14 @@ class LDAP extends Session
         $connection   = $this->ldapConfig->getConnection($connectionId);
 
         if ($connection->id !== $connectionId) {
-            throw new LDAPException('invalid_configuration');
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
+        }
+
+        $groupMappings    = $connection->syncGroupsOnLogin ? $connection->groupMappings : null;
+        $configuredGroups = array_keys($groupMappings ?? []);
+
+        if ($configuredGroups !== [] && array_diff($configuredGroups, array_keys(setting('AuthGroups.groups'))) !== []) {
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
         }
 
         $predicates = [];
@@ -191,43 +206,46 @@ class LDAP extends Session
             $predicates[] = LDAPFilter::equal($attribute, $identifier);
         }
 
-        $filter = LDAPFilter::all($connection->loginFilter, LDAPFilter::any(...$predicates));
-        $entry  = $this->directory->authenticate(
+        $baseDn    = $connection->userBaseDn ?? $connection->baseDn;
+        $directory = $this->directory;
+
+        if (is_array($baseDn) && ! $directory instanceof MultiBaseLDAPDirectoryInterface) {
+            throw new LDAPException(LDAPReason::InvalidConfiguration);
+        }
+
+        $includeProfile = $connection->syncProfileOnLogin || $connection->provisionUsers;
+        $attributes     = $includeProfile ? array_values($connection->profileAttributes) : [];
+        $filter         = LDAPFilter::all($connection->loginFilter, LDAPFilter::any(...$predicates));
+        $entry          = $directory->authenticate(
             $connection,
-            $connection->userBaseDn ?? $connection->baseDn,
+            $baseDn,
             $filter,
-            array_values(array_unique([$connection->externalIdAttribute, ...array_values($connection->profileAttributes)])),
+            array_values(array_unique([$connection->externalIdAttribute, ...$attributes])),
             $password,
             $connection->eligibilityFilter,
         );
 
-        $ids = $entry['attributes'][strtolower($connection->externalIdAttribute)] ?? [];
+        $matchedGroups = $groupMappings === [] ? [] : null;
 
-        if (count($ids) !== 1 || $ids[0] === '') {
-            throw new LDAPException('invalid_identity');
-        }
+        if ($configuredGroups !== []) {
+            $matchedGroups = $entry['matchedGroups'] ?? throw new LDAPException(LDAPReason::InvalidConfiguration);
 
-        $externalId = strcasecmp($connection->externalIdAttribute, 'objectGUID') === 0
-            ? LDAPUserResolver::normalizeObjectGuid($ids[0])
-            : $ids[0];
-        $profile = [];
-
-        foreach ($connection->profileAttributes as $field => $attribute) {
-            $values = $entry['attributes'][strtolower($attribute)] ?? [];
-
-            if (count($values) === 1) {
-                $profile[$field] = $values[0];
-            } elseif ($values !== []) {
-                throw new LDAPException('invalid_profile');
+            if (array_diff($matchedGroups, $configuredGroups) !== []) {
+                throw new LDAPException(LDAPReason::InvalidDirectoryEntry);
             }
         }
 
+        $readProfile = static fn (): array => LDAPUserResolver::profile($connection, $entry['attributes']);
+
         return $this->resolver->resolve(
             $connection->id,
-            $externalId,
-            $profile,
+            LDAPUserResolver::externalId($connection, $entry['attributes']),
+            $connection->syncProfileOnLogin ? $readProfile() : [],
             $connection->provisionUsers,
-            $connection->updateProfile,
+            $connection->syncProfileOnLogin && $connection->updateProfile,
+            $this->localAccounts,
+            $matchedGroups,
+            ! $connection->syncProfileOnLogin && $connection->provisionUsers ? $readProfile : null,
         );
     }
 
@@ -241,7 +259,11 @@ class LDAP extends Session
 
         if ($user === null || (string) $user->id !== (string) $expectedId || $hash === null || $hash === '') {
             $authOptions = get_object_vars(config('Auth'));
-            $passwords->verify($password, $authOptions['dummyPasswordHash'] ?? self::DUMMY_PASSWORD_HASH);
+            $dummyHash   = $authOptions['dummyPasswordHash'] ?? null;
+
+            if ($dummyHash !== null) {
+                $passwords->verify($password, $dummyHash);
+            }
 
             return $this->failedResult();
         }

@@ -3,50 +3,51 @@ name: PHPUnit
 on:
   pull_request:
     branches:
+      - develop
       - main
     paths:
       - '**.php'
+      - '**.inc'
       - 'composer.json'
       - 'phpunit.dist.xml'
       - '.github/workflows/phpunit.yml'
   push:
     branches:
+      - develop
       - main
     paths:
       - '**.php'
+      - '**.inc'
       - 'composer.json'
       - 'phpunit.dist.xml'
       - '.github/workflows/phpunit.yml'
 
+permissions:
+  contents: read
+
 jobs:
   phpunit:
+    name: PHPUnit / PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        php-version: ['8.2', '8.3', '8.4', '8.5']
-        db-platform: ['MySQLi', 'SQLite3']
-        mysql-version: ['8.0']
-        dependencies: ['highest']
-        include:
-          # MySQL 5.7
-          - php-version: '8.2'
-            db-platform: MySQLi
-            mysql-version: '5.7'
-          # Postgre
-          - php-version: '8.2'
-            db-platform: Postgre
-            mysql-version: '8.0'
-          # SQLSRV
-          - php-version: '8.2'
-            db-platform: SQLSRV
-            mysql-version: '8.0'
-          # OCI8
-          - php-version: '8.2'
-            db-platform: OCI8
-            mysql-version: '8.0'
+        php: ['8.2', '8.3', '8.4', '8.5']
 
-    uses: codeigniter4/.github/.github/workflows/phpunit.yml@CI47
-    with:
-      php-version: ${{ matrix.php-version }}
-      db-platform: ${{ matrix.db-platform }}
-      mysql-version: ${{ matrix.mysql-version }}
-      dependencies: ${{ matrix.dependencies }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: intl, mbstring, sqlite3
+          coverage: xdebug
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Run PHPUnit with coverage
+        run: composer test -- --testsuite main --coverage-text
+        env:
+          TACHYCARDIA_MONITOR_GA: enabled

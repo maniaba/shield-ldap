@@ -28,9 +28,35 @@ default. Enable it after configuring your directory and [web login](../quick_sta
 
 Use `ldaps` for listeners that negotiate TLS as soon as they accept a connection
 (normally port 636). Use `starttls` for listeners that accept the LDAP StartTLS
-operation before bind (normally port 389). The native transport requires TLS
-validation and rejects referrals. Each process uses the same OpenLDAP client
-trust policy for its configured directories.
+operation before bind (normally port 389). The native transport verifies
+certificates by default and rejects referrals. Verified connections use the
+OpenLDAP client trust policy for the PHP process.
+
+### Local TLS Testing
+
+For controlled local testing with StartTLS, declare `verifyCertificate` in your
+connection settings in **app/Config/AuthLDAP.php**. For a connection named
+`default`, add these entries to `$connections['default']`.
+
+```php
+'encryption'        => 'starttls',
+'verifyCertificate' => true,
+```
+
+Override the option in the testing environment's **.env**.
+
+```ini
+authldap.connections.default.verifyCertificate = false
+```
+
+!!! warning
+    Setting this option to `false` skips certificate chain and hostname checks.
+    StartTLS is still required, but the client cannot verify the server's
+    identity. Keep certificate verification enabled in production.
+
+The native transport supports this override for StartTLS starting with PHP
+8.3.22 in the 8.3 series and PHP 8.4.8 in the 8.4 series. PHP 8.5 and later also
+support it. LDAPS and earlier PHP versions reject the override.
 
 ## Active Directory
 
@@ -126,6 +152,76 @@ For another LDAPv3 server, choose the login attributes, filters, and immutable
 identifier according to its schema. The identifier must be unique, readable, and
 stable across account renames and moves. See [Login Eligibility](../guides/login_eligibility.md)
 and the [configuration reference](../references/configuration.md).
+
+## Multiple Search Bases
+
+Set `userBaseDn` to a list of 1 to 10 distinguished names to configure the user
+search bases. For example, add these settings to the `corporate` connection to
+search two sibling organizational units in Active Directory.
+
+```php
+'baseDn'     => 'DC=example,DC=com',
+'userBaseDn' => [
+    'OU=Employees,DC=example,DC=com',
+    'OU=Contractors,DC=example,DC=com',
+],
+```
+
+Use a string `userBaseDn` for a single user search base. If you omit it or set
+it to `null`, user searches use the root DN in `baseDn`. The service account
+needs permission to search each selected base. The native transport checks for
+a single match across the selected bases before it verifies the password. See the
+[configuration reference](../references/configuration.md#login-and-eligibility-filters).
+
+## Map LDAP Groups to Shield Groups
+
+Run the migrations after installing Shield to create the table that records
+LDAP group assignments. To use a custom table name, add the following entry to
+the existing `$tables` array in **app/Config/Auth.php** before running the
+migration.
+
+```php
+'ldap_group_grants' => 'auth_ldap_group_grants',
+```
+
+If Shield's config omits this key, Shield LDAP reads it from `$tables` in
+**app/Config/AuthLDAP.php**. The default is `shield_ldap_group_grants`.
+
+```console
+php spark migrate --all
+```
+
+If the grants table already exists, rename it in the database when updating
+this setting so its recorded assignments carry over.
+
+Set `groupMappings` on each connection that should manage Shield groups. Use a
+key from `Config\AuthGroups::$groups` on the left and the full DN of an LDAP
+group entry on the right.
+
+```php
+'groupMappings' => [
+    'user'      => 'CN=Users Group,OU=Groups,DC=example,DC=com',
+    'developer' => 'CN=Developers,OU=Groups,DC=example,DC=com',
+],
+```
+
+For OpenLDAP, a group DN might be `cn=shield-users,ou=groups,dc=example,dc=org`.
+An organizational unit such as `OU=Users,DC=example,DC=com` is a container. Use
+the DN of the group entry that lists its members.
+
+The service account needs permission to search each mapped group by its
+membership attribute. The native directory checks direct `member` membership
+for Active Directory `group` and OpenLDAP `groupOfNames` entries, and direct
+`uniqueMember` membership for `groupOfUniqueNames`. Active Directory primary
+groups and membership inherited through nested groups are outside this lookup.
+See [Group assignments](../guides/user_management.md#authorization) for how
+assignments are stored.
+
+Set `groupMappings` to an empty array to revoke this connection's previous
+grants when group synchronization runs. Omitting the option or setting it to
+`null` disables group management for that connection. See
+[Move Sign-In Updates to Scheduled Commands](../commands/ldap-sync.md#move-sign-in-updates-to-scheduled-commands)
+to control when group and profile updates run.
 
 ## Environment Overrides
 

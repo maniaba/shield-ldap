@@ -17,16 +17,16 @@ Install a stable release from Packagist with Composer once one is available.
 composer require maniaba/shield-ldap
 ```
 
-To install the development branch currently available on Packagist, specify its
-version explicitly.
+To install from the development branch, specify its version explicitly.
 
 ```console
-composer require maniaba/shield-ldap:dev-main
+composer require maniaba/shield-ldap:dev-develop
 ```
 
 See the [Shield LDAP User Guide](https://maniaba.github.io/shield-ldap/latest/) for
 installation, configuration, and web login. The [guide source](docs/index.md)
-is available in this repository.
+is available in this repository. See the [changelog](CHANGELOG.md) for release
+changes.
 
 ## Contributing
 
@@ -35,4 +35,6 @@ request guidelines.
 
 ## License
 
-Shield LDAP is distributed under the [MIT License](LICENSE).
+Shield LDAP is maintained by [maniaba](https://github.com/maniaba) and distributed
+under the [MIT License](LICENSE). The license file includes the copyright notices
+for code adapted from CodeIgniter Shield.

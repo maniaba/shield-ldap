@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 /**
- * This file is part of CodeIgniter Shield.
+ * This file is part of Shield LDAP.
  *
- * (c) CodeIgniter Foundation <admin@codeigniter.com>
+ * Copyright (c) 2026 maniaba
+ * SPDX-License-Identifier: MIT
  *
- * For the full copyright and license information, please view
- * the LICENSE file that was distributed with this source code.
+ * See the LICENSE file for the full copyright and license information.
  */
 
 namespace Maniaba\ShieldLDAP\Tests\Support\LDAP;
@@ -28,8 +28,10 @@ final class LoginController extends BaseController
     public function loginAction(): RedirectResponse
     {
         /** @var LDAP $ldap */
-        $ldap   = auth('ldap')->getAuthenticator();
-        $result = $ldap->attempt($this->request->getPost(['username', 'password']));
+        $ldap = auth('ldap')->getAuthenticator();
+
+        $result = $ldap->remember((bool) $this->request->getPost('remember'))
+            ->attempt($this->request->getPost(['username', 'password']));
 
         if (! $result->isOK()) {
             return redirect()->route('login')->with('error', $result->reason());

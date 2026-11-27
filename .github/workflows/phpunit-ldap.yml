@@ -3,10 +3,12 @@ name: OpenLDAP Integration Tests
 on:
   pull_request:
     branches:
+      - develop
       - main
     paths:
       - 'src/Authentication/LDAP/**'
       - 'src/Exceptions/LDAPException.php'
+      - 'src/Exceptions/LDAPReason.php'
       - 'src/Language/en/ShieldLDAP.php'
       - 'tests/Authentication/LDAP/**'
       - 'tests/_support/LDAP/**'
@@ -16,10 +18,12 @@ on:
       - '.github/workflows/phpunit-ldap.yml'
   push:
     branches:
+      - develop
       - main
     paths:
       - 'src/Authentication/LDAP/**'
       - 'src/Exceptions/LDAPException.php'
+      - 'src/Exceptions/LDAPReason.php'
       - 'src/Language/en/ShieldLDAP.php'
       - 'tests/Authentication/LDAP/**'
       - 'tests/_support/LDAP/**'
@@ -33,9 +37,13 @@ permissions:
 
 jobs:
   main:
-    name: OpenLDAP Integration Tests
+    name: OpenLDAP Integration Tests / PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3']
 
     steps:
       - name: Checkout
@@ -46,7 +54,7 @@ jobs:
       - name: Set up PHP
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
         with:
-          php-version: '8.2'
+          php-version: ${{ matrix.php }}
           extensions: ldap, intl, mbstring
           coverage: none
 

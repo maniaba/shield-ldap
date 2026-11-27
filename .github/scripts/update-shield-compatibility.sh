@@ -50,9 +50,11 @@ fi
 
 : "${GH_TOKEN:?Set the SHIELD_COMPATIBILITY_TOKEN repository secret to open pull requests. See CONTRIBUTING.md.}"
 repository=${GITHUB_REPOSITORY:?Set GITHUB_REPOSITORY to the repository name.}
+base_branch=${SHIELD_COMPATIBILITY_BASE_BRANCH:-$(gh api "repos/$repository" --jq '.default_branch')}
 owner=${repository%%/*}
 
-open_heads=$(gh api --paginate "repos/$repository/pulls?state=open&base=main&per_page=100" \
+open_heads=$(gh api --method GET --paginate "repos/$repository/pulls" \
+  -f state=open -f "base=$base_branch" -f per_page=100 \
   --jq '.[] | [.head.repo.full_name, .head.ref] | @tsv')
 while IFS=$'\t' read -r head_repository head_branch; do
   if [[ "$head_repository" == "$repository" && "$head_branch" == "$branch_prefix"* ]]; then
@@ -99,7 +101,7 @@ publish_release() {
     ' | gh api graphql --input - --jq '.data.createCommitOnBranch.commit.oid'
   fi
 
-  gh pr create --repo "$repository" --base main --head "$branch" \
+  gh pr create --repo "$repository" --base "$base_branch" --head "$branch" \
     --title "ci: test Shield $version" --body-file - <<EOF
 Add Shield \`$version\` to the compatibility matrix on PHP 8.2.
 
@@ -109,7 +111,7 @@ EOF
 
 while IFS= read -r version; do
   prior=$(gh api --method GET "repos/$repository/pulls" \
-    -f state=all -f base=main -f "head=$owner:$branch_prefix$version" -f per_page=1 --jq '.[].number')
+    -f state=all -f "base=$base_branch" -f "head=$owner:$branch_prefix$version" -f per_page=1 --jq '.[].number')
   if [[ -z "$prior" ]]; then
     publish_release "$version"
     exit 0

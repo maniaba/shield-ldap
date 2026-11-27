@@ -3,40 +3,40 @@
 declare(strict_types=1);
 
 /**
- * This file is part of CodeIgniter Shield.
+ * This file is part of Shield LDAP.
  *
- * (c) CodeIgniter Foundation <admin@codeigniter.com>
+ * Copyright (c) 2026 maniaba
+ * SPDX-License-Identifier: MIT
  *
- * For the full copyright and license information, please view
- * the LICENSE file that was distributed with this source code.
+ * See the LICENSE file for the full copyright and license information.
  */
 
 namespace Maniaba\ShieldLDAP\Authentication\LDAP;
 
 use Closure;
-use CodeIgniter\Database\BaseConnection;
 use CodeIgniter\Shield\Entities\User;
-use CodeIgniter\Shield\Entities\UserIdentity;
 use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Shield\Models\UserModel;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
-use Throwable;
+use Maniaba\ShieldLDAP\Exceptions\LDAPReason;
 
 /**
- * Resolves verified directory identities to Shield users.
+ * Resolves verified directory identities and preserves the original LDAP user API.
  */
 final readonly class LDAPUserResolver
 {
-    public const ID_TYPE = 'ldap';
+    public const ID_TYPE = LDAPIdentityPersistence::TYPE;
 
-    private UserIdentityModel $identities;
+    private LDAPLinkService $links;
+    private LDAPProfileSynchronizer $profiles;
 
     /**
      * Uses the standard identity model unless the caller supplies one.
      */
-    public function __construct(private UserModel $users, ?UserIdentityModel $identities = null)
+    public function __construct(UserModel $users, ?UserIdentityModel $identities = null)
     {
-        $this->identities = $identities ?? model(UserIdentityModel::class);
+        $this->links    = new LDAPLinkService($users, $identities);
+        $this->profiles = new LDAPProfileSynchronizer($users, $identities);
     }
 
     /**
@@ -45,7 +45,10 @@ final readonly class LDAPUserResolver
      * Profile keys must be explicitly mapped to writable UserModel columns.
      * LDAP contact addresses cannot modify the local email/password identity.
      *
-     * @param array<string, string|null> $profile
+     * @param array<string, string|null>              $profile
+     * @param array<array-key, int|string>            $localAccounts
+     * @param list<string>|null                       $groups              Verified Shield group keys
+     * @param (Closure(): array<string, string>)|null $provisioningProfile Read mapped fields only for a new account
      */
     public function resolve(
         string $connectionId,
@@ -53,85 +56,120 @@ final readonly class LDAPUserResolver
         array $profile = [],
         bool $provision = false,
         bool $updateProfile = true,
+        array $localAccounts = [],
+        ?array $groups = null,
+        ?Closure $provisioningProfile = null,
     ): User {
-        $key     = $this->identityKey($connectionId, $externalId);
-        $profile = $this->validateProfile($profile);
+        return $this->profiles->resolve($connectionId, $externalId, $profile, $provision, $updateProfile, $localAccounts, $groups, $provisioningProfile);
+    }
 
-        return $this->atomically(function () use ($connectionId, $key, $profile, $provision, $updateProfile): User {
-            $identity = $this->identities->getIdentityBySecret(self::ID_TYPE, $key);
+    /**
+     * Preview or apply the synchronization of an eligible, service-account-verified directory entry.
+     *
+     * @param array<string, string|null>   $profile
+     * @param array<array-key, int|string> $localAccounts
+     *
+     * @return 'create'|'skipped'|'unchanged'|'update'
+     */
+    public function synchronize(
+        LDAPConnection $connection,
+        string $externalId,
+        array $profile,
+        array $localAccounts,
+        bool $apply,
+    ): string {
+        $plan = $this->profiles->plan($connection, $externalId, $profile, $localAccounts);
 
-            if ($identity === null) {
-                if (! $provision) {
-                    throw new LDAPException('user_not_provisioned');
-                }
-
-                $username = $profile['username'] ?? null;
-                if ($username === null) {
-                    throw new LDAPException('invalid_profile');
-                }
-
-                $this->checkUsername($username);
-
-                $userId = $this->users->insert($profile);
-                if ($userId === true) {
-                    throw new LDAPException('synchronization_conflict');
-                }
-
-                $user = $this->readBackProfile($userId, $profile);
-                $this->createIdentity($connectionId, $key, $userId);
-
-                return $user;
-            }
-
-            $user = $this->findUser($identity->user_id);
-            if (! $updateProfile || $user->isBanned() || ! $user->isActivated()) {
-                return $user;
-            }
-
-            $stored = $user->toRawArray();
-
-            foreach ($profile as $field => $value) {
-                if (array_key_exists($field, $stored) && $stored[$field] === $value) {
-                    unset($profile[$field]);
-                }
-            }
-
-            if ($profile === []) {
-                return $user;
-            }
-
-            if (isset($profile['username'])) {
-                $this->checkUsername($profile['username'], $identity->user_id);
-            }
-
-            $this->users->update($identity->user_id, $profile);
-
-            return $this->readBackProfile($identity->user_id, $profile);
-        });
+        return ($apply ? $this->profiles->apply($plan) : $plan->status)->value;
     }
 
     /**
      * Explicitly associate a verified directory ID with a selected Shield user.
      *
-     * The caller must authorize the link and verify the external ID. The
-     * resolver never selects the local account by a directory profile value.
+     * The caller must authorize the link and verify the external ID. Supply the
+     * expected local username when the selection comes from a username lookup.
      */
-    public function link(string $connectionId, string $externalId, int|string $userId): User
+    public function link(string $connectionId, string $externalId, int|string $userId, ?string $expectedUsername = null): User
     {
-        $key = $this->identityKey($connectionId, $externalId);
+        return $this->links->link($connectionId, $externalId, $userId, $expectedUsername);
+    }
 
-        return $this->atomically(function () use ($connectionId, $key, $userId): User {
-            $user     = $this->findUser($userId);
-            $identity = $this->identities->getIdentityBySecret(self::ID_TYPE, $key);
+    /**
+     * Check whether a proposed username-based link already exists.
+     *
+     * @throws LDAPException If either side already has a conflicting link.
+     */
+    public function isLinked(User $user, string $connectionId, string $externalId): bool
+    {
+        return $this->links->isLinked($user, $connectionId, $externalId);
+    }
 
-            if ($identity === null) {
-                $this->createIdentity($connectionId, $key, $userId);
-            } elseif ((string) $identity->user_id !== (string) $user->id) {
-                throw new LDAPException('identity_conflict');
+    /**
+     * Report the state of a proposed link for an existing Shield user.
+     *
+     * @return 'already_linked'|'candidate'|'stale_link'
+     *
+     * @throws LDAPException If the link is ambiguous or the key is already assigned elsewhere.
+     */
+    public function inspectLink(User $user, string $connectionId, string $externalId): string
+    {
+        return $this->links->inspectLink($user, $connectionId, $externalId)->value;
+    }
+
+    /**
+     * Replace one existing link after the caller verifies the new directory ID and authorizes the change.
+     */
+    public function replaceLink(
+        string $connectionId,
+        string $externalId,
+        int|string $userId,
+        string $expectedUsername,
+    ): bool {
+        return $this->links->replaceLink($connectionId, $externalId, $userId, $expectedUsername);
+    }
+
+    /**
+     * Read the configured immutable identifier and normalize binary Active Directory GUIDs.
+     *
+     * @param array<string, list<string>> $attributes
+     */
+    public static function externalId(LDAPConnection $connection, array $attributes): string
+    {
+        $ids = $attributes[strtolower($connection->externalIdAttribute)] ?? [];
+
+        if (count($ids) !== 1 || $ids[0] === '') {
+            throw new LDAPException(LDAPReason::InvalidIdentity);
+        }
+
+        return strcasecmp($connection->externalIdAttribute, 'objectGUID') === 0
+            ? self::normalizeObjectGuid($ids[0])
+            : $ids[0];
+    }
+
+    /**
+     * Map present, single-valued directory attributes to local profile fields.
+     *
+     * @param array<string, list<string>> $attributes
+     *
+     * @return array<string, string>
+     */
+    public static function profile(LDAPConnection $connection, array $attributes): array
+    {
+        $profile = [];
+
+        foreach ($connection->profileAttributes as $field => $attribute) {
+            $values = $attributes[strtolower($attribute)] ?? [];
+
+            if (count($values) > 1) {
+                throw new LDAPException(LDAPReason::InvalidProfile);
             }
 
-            return $user;
-        });
+            if ($values !== []) {
+                $profile[$field] = $values[0];
+            }
+        }
+
+        return $profile;
     }
 
     /**
@@ -140,7 +178,7 @@ final readonly class LDAPUserResolver
     public static function normalizeObjectGuid(string $bytes): string
     {
         if (strlen($bytes) !== 16) {
-            throw new LDAPException('invalid_identity');
+            throw new LDAPException(LDAPReason::InvalidIdentity);
         }
 
         return bin2hex(strrev(substr($bytes, 0, 4)))
@@ -148,159 +186,5 @@ final readonly class LDAPUserResolver
             . '-' . bin2hex(strrev(substr($bytes, 6, 2)))
             . '-' . bin2hex(substr($bytes, 8, 2))
             . '-' . bin2hex(substr($bytes, 10));
-    }
-
-    private function identityKey(string $connectionId, string $externalId): string
-    {
-        if (preg_match('/\A[a-zA-Z0-9_-]{1,64}\z/', $connectionId) !== 1 || $externalId === '' || strlen($externalId) > 1024) {
-            throw new LDAPException('invalid_identity');
-        }
-
-        return hash('sha256', $connectionId . "\0" . $externalId);
-    }
-
-    /**
-     * @param array<string, string|null> $profile
-     *
-     * @return array<string, string|null>
-     */
-    private function validateProfile(array $profile): array
-    {
-        $reserved = [
-            'id', 'userid', 'email', 'password', 'passwordhash', 'secret', 'secret2',
-            'identities', 'active', 'status', 'statusmessage', 'forcereset',
-            'groups', 'permissions', 'createdat', 'updatedat', 'deletedat', 'lastactive',
-        ];
-
-        foreach (array_keys($profile) as $field) {
-            $collapsed = str_replace('_', '', strtolower($field));
-
-            if (preg_match('/\A[a-zA-Z][a-zA-Z0-9_]*\z/', $field) !== 1
-                || in_array($collapsed, $reserved, true)
-                || ($collapsed === 'username' && $field !== 'username')
-            ) {
-                throw new LDAPException('invalid_profile');
-            }
-        }
-
-        if (array_key_exists('username', $profile)) {
-            $username = $profile['username'];
-
-            if ($username === null
-                || trim($username) === ''
-                || str_contains($username, "\0")
-                || ! mb_check_encoding($username, 'UTF-8')
-                || mb_strlen($username, 'UTF-8') > 30
-            ) {
-                throw new LDAPException('invalid_profile');
-            }
-
-            $profile['username'] = strtolower($username);
-        }
-
-        return $profile;
-    }
-
-    private function checkUsername(string $username, int|string|null $ownerId = null): void
-    {
-        $owner = $this->users->findByCredentials(['username' => $username]);
-        if ($owner !== null && ($ownerId === null || (string) $owner->id !== (string) $ownerId)) {
-            throw new LDAPException('identity_conflict');
-        }
-    }
-
-    private function findUser(int|string $userId): User
-    {
-        $user = $this->users->findById($userId);
-        if ($user === null) {
-            throw new LDAPException('identity_conflict');
-        }
-
-        return $user;
-    }
-
-    /**
-     * @param array<string, string|null> $profile
-     */
-    private function readBackProfile(int|string $userId, array $profile): User
-    {
-        $user   = $this->findUser($userId);
-        $stored = $user->toRawArray();
-
-        foreach ($profile as $field => $value) {
-            if (! array_key_exists($field, $stored) || $stored[$field] !== $value) {
-                throw new LDAPException('invalid_profile');
-            }
-        }
-
-        return $user;
-    }
-
-    private function createIdentity(string $connectionId, string $key, int|string $userId): void
-    {
-        $this->identities->create(new UserIdentity([
-            'user_id' => $userId,
-            'type'    => self::ID_TYPE,
-            'name'    => $connectionId,
-            'secret'  => $key,
-        ]));
-
-        $identity = $this->identities->getIdentityBySecret(self::ID_TYPE, $key);
-        if ($identity === null || (string) $identity->user_id !== (string) $userId) {
-            throw new LDAPException('synchronization_conflict');
-        }
-    }
-
-    /**
-     * @param Closure(): User $operation
-     */
-    private function atomically(Closure $operation): User
-    {
-        try {
-            $database = $this->users->builder()->db();
-            // CodeIgniter does not independently roll back nested transactions.
-            if ($database !== $this->identities->builder()->db()
-                || $database->transDepth !== 0
-                || ! $database->transStatus()
-                || ! $database->transBegin()
-            ) {
-                throw new LDAPException('synchronization_conflict');
-            }
-
-            $strict = $database->transStrict;
-            $database->transStrict(false);
-
-            try {
-                $user = $operation();
-                if (! $database->transComplete()) {
-                    throw new LDAPException('synchronization_conflict');
-                }
-
-                return $user;
-            } finally {
-                try {
-                    if ($database->transDepth !== 0) {
-                        $this->rollBack($database);
-                    }
-                } finally {
-                    $database->transStrict($strict);
-                }
-            }
-        } catch (LDAPException $e) {
-            throw $e;
-        } catch (Throwable) {
-            // Model exceptions can contain SQL with directory and local account data.
-            throw new LDAPException('synchronization_conflict');
-        }
-    }
-
-    private function rollBack(BaseConnection $database): void
-    {
-        if ($database->transStatus()) {
-            $database->transRollback();
-        } else {
-            // Completing a failed non-strict transaction rolls back and resets its status.
-            $database->transComplete();
-        }
     }
 }

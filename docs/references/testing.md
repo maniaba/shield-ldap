@@ -12,9 +12,9 @@ composer test
 `composer test` runs the `main` PHPUnit suite. It covers configuration,
 filters, authentication, account provisioning, and Shield's web session
 lifecycle using directory doubles. It runs without a live LDAP server.
-SQLite3 is sufficient for local development. The
+The main suite uses an in-memory SQLite database. The
 [PHPUnit workflow](https://github.com/maniaba/shield-ldap/actions/workflows/phpunit.yml)
-runs the suite across PHP versions and database drivers. The
+runs the suite with code coverage on PHP 8.2 through 8.5. The
 [compatibility workflow](https://github.com/maniaba/shield-ldap/actions/workflows/compatibility.yml)
 checks selected Shield releases.
 

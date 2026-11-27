@@ -5,12 +5,12 @@
 Use PHP 8.2 or later in the 8.x series, Composer, and Git. Enable SQLite3 for
 the default test database.
 
-1. Fork the repository, clone your fork, and create a branch from `main`.
+1. Fork the repository, clone your fork, and create a branch from `develop`.
 
     ```console
     git clone https://github.com/YOUR-USERNAME/shield-ldap.git
     cd shield-ldap
-    git switch -c your-change
+    git switch -c your-change origin/develop
     ```
 
 2. Install the development dependencies.
@@ -25,8 +25,10 @@ Run `composer test` for the PHPUnit suite. Run `composer test:ldap` for the
 native OpenLDAP integration suite when changing the LDAP transport. See the
 [testing guide](docs/references/testing.md) for integration prerequisites.
 
-Follow the CodeIgniter coding standard. Run `composer cs` to check formatting,
-or `composer cs-fix` to apply it. Run `composer analyze` for static analysis.
+Follow the CodeIgniter coding standard and include the Shield LDAP MIT header in
+every PHP file, including `.inc` files. Run `composer cs-fix` to add the header
+and apply formatting. The `composer cs` check verifies both locally and in CI.
+Run `composer analyze` for static analysis.
 `composer ci` runs the style, analysis, inspection, and PHPUnit checks together.
 
 ## Documentation
@@ -45,9 +47,44 @@ Run `mkdocs build --strict` before submitting documentation changes.
 
 ## Pull Requests
 
-- Open pull requests against `main` and keep each one focused on a single change.
+- Open development pull requests against `develop` and keep each one focused on a single change.
 - Explain what changed and how you verified it.
 - Include regression tests for behavior changes and update the relevant examples.
+
+`develop` is the default branch for development. `main` is the release branch.
+GitHub Actions checks both branches.
+
+## Releasing Shield LDAP
+
+1. Create a preparation branch from `develop`, such as `release/v1.0.0`. Add
+   the matching entry to [CHANGELOG.md](CHANGELOG.md) and open a pull request
+   against `develop`. Review it and merge once GitHub Actions passes.
+2. Open a pull request to `main` from the prepared `develop` commit. Review the
+   release diff and wait for GitHub Actions to pass, then use
+   **Create a merge commit** to preserve the development history.
+3. Fetch `main` and confirm its tip matches the promotion PR's merge commit.
+   Create and push a signed, annotated tag for that commit. For example, for
+   `v1.0.0` run the following commands after verifying the commit.
+
+   ```console
+   git fetch origin main
+   git log -1 --oneline origin/main
+   git tag -s -m "Shield LDAP v1.0.0" v1.0.0 origin/main
+   git push origin refs/tags/v1.0.0
+   ```
+
+4. Copy the matching changelog section into a local `release-notes.md` file and
+   publish the GitHub release from the existing tag.
+
+   ```console
+   gh release create v1.0.0 --verify-tag --title v1.0.0 --notes-file release-notes.md
+   ```
+
+5. Check that Packagist lists the new version and that the User Guide workflow
+   publishes the numbered guide and updates `/latest/`.
+
+Composer derives the package version from the Git tag.
+[Composer versioning for libraries](https://getcomposer.org/doc/02-libraries.md#library-versioning)
 
 ## Reporting Issues
 
@@ -58,11 +95,25 @@ directory data from any configuration or logs you share.
 ## Publishing the User Guide
 
 The [User Guide workflow](.github/workflows/docs.yml) publishes development
-documentation from `main` and a guide for each stable `vMAJOR.MINOR.PATCH` tag.
+documentation from `develop` and a guide for each stable `vMAJOR.MINOR.PATCH` tag.
 Each stable guide has its own URL, such as `/1.2.3/`, and appears in the version
 selector. The `/latest/` address serves the development guide until the first
-stable release, then serves the latest stable guide. Run the workflow on `main` to
-refresh the site after a publishing failure.
+stable release, then serves the latest stable guide. Tag stable releases from
+`main`.
+
+In the repository settings, open **Environments** and select **github-pages**.
+Under **Deployment branches and tags**, use **Selected branches and tags** and
+add an exact branch rule for `develop`.
+[GitHub Actions environment settings](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments#creating-an-environment)
+
+If the `publish` job is rejected before its steps start, check the job
+annotations for the deployment branch. After correcting the branch rule,
+rerun the failed job. To publish the guide from the current `develop` commit,
+run the workflow again from that branch.
+
+```console
+gh workflow run docs.yml --ref develop
+```
 
 ## Shield Compatibility Updates
 
@@ -78,7 +129,8 @@ to this repository with **Contents** and **Pull requests** read and write
 permissions. A repository-scoped token lets the automated PR trigger the same
 checks as a contributor's PR. [GitHub workflow triggers](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
 
-Run the workflow manually from `main` to check immediately. To list pending
+The workflow opens compatibility pull requests against the default branch.
+Run it manually from `develop` to check immediately. To list pending
 versions locally, run the detection step in dry-run mode.
 
 ```console

@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 /**
- * This file is part of CodeIgniter Shield.
+ * This file is part of Shield LDAP.
  *
- * (c) CodeIgniter Foundation <admin@codeigniter.com>
+ * Copyright (c) 2026 maniaba
+ * SPDX-License-Identifier: MIT
  *
- * For the full copyright and license information, please view
- * the LICENSE file that was distributed with this source code.
+ * See the LICENSE file for the full copyright and license information.
  */
 
 namespace Maniaba\ShieldLDAP\Authentication\LDAP;
@@ -28,11 +28,13 @@ if (! \extension_loaded('ldap')) {
         'LDAP_OPT_X_TLS_REQUIRE_CERT' => 24_582,
         'LDAP_OPT_X_TLS_DEMAND'       => 2,
         'LDAP_OPT_X_TLS_HARD'         => 1,
+        'LDAP_OPT_X_TLS_NEVER'        => 0,
         'LDAP_OPT_PROTOCOL_VERSION'   => 17,
         'LDAP_OPT_REFERRALS'          => 8,
         'LDAP_OPT_DEREF'              => 2,
         'LDAP_DEREF_NEVER'            => 0,
         'LDAP_OPT_DIAGNOSTIC_MESSAGE' => 50,
+        'LDAP_CONTROL_PAGEDRESULTS'   => '1.2.840.113556.1.4.319',
     ] as $option => $value) {
         define($option, $value);
     }
@@ -71,11 +73,20 @@ function ldap_get_option(Connection $connection, int $option, int|string|null &$
 
 function ldap_set_option(Connection $connection, int $option, bool|int $value): bool
 {
+    return $option !== LDAP_OPT_X_TLS_REQUIRE_CERT || NativeLDAPStub::$certificateOptionSucceeds;
+}
+
+function ldap_start_tls(Connection $connection): bool
+{
+    NativeLDAPStub::$tlsStarts++;
+
     return true;
 }
 
 function ldap_bind(Connection $connection, string $dn, string $password): bool
 {
+    NativeLDAPStub::$operations[] = ['bind', $dn];
+
     $uri                       = NativeLDAPStub::$connected[array_key_last(NativeLDAPStub::$connected)];
     NativeLDAPStub::$lastError = NativeLDAPStub::$bindErrors[$uri] ?? 0;
 
@@ -101,16 +112,74 @@ function ldap_errno(Connection $connection): int
 /**
  * @param list<string> $attributes
  */
-function ldap_search(Connection $connection, string $base, string $filter, array $attributes, int $attributesOnly, int $sizeLimit, int $timeLimit): false|stdClass
-{
-    NativeLDAPStub::$lastError = NativeLDAPStub::$searchCode;
+function ldap_search(
+    Connection $connection,
+    string $base,
+    string $filter,
+    array $attributes,
+    int $attributesOnly,
+    int $sizeLimit,
+    int $timeLimit,
+    int $deref = LDAP_DEREF_NEVER,
+    ?array $controls = null,
+): false|stdClass {
+    NativeLDAPStub::$operations[] = ['search', $base];
 
-    return NativeLDAPStub::$searchFails ? false : new stdClass();
+    if ($controls === null) {
+        return scriptedSearch($base, $filter, $attributes);
+    }
+
+    NativeLDAPStub::$pagedRequests[] = compact('base', 'filter', 'attributes', 'sizeLimit', 'controls');
+    $page                            = array_shift(NativeLDAPStub::$pages) ?? ['entries' => []];
+
+    return (object) [
+        'code'      => $page['code'] ?? 0,
+        'entries'   => $page['entries'],
+        'referrals' => $page['referrals'] ?? [],
+        'controls'  => isset($page['cookie']) ? [
+            LDAP_CONTROL_PAGEDRESULTS => ['value' => ['cookie' => $page['cookie']]],
+        ] : [],
+    ];
 }
 
-function ldap_parse_result(Connection $connection, stdClass $result, ?int &$code): bool
+/**
+ * @param list<string> $attributes
+ */
+function ldap_read(Connection $connection, string $base, string $filter, array $attributes, int $attributesOnly, int $sizeLimit, int $timeLimit): false|stdClass
 {
-    $code = NativeLDAPStub::$searchCode;
+    NativeLDAPStub::$operations[] = ['read', $base];
+
+    return scriptedSearch($base, $filter, $attributes);
+}
+
+/**
+ * @param list<string> $attributes
+ */
+function scriptedSearch(string $base, string $filter, array $attributes): false|stdClass
+{
+    NativeLDAPStub::$queries[] = ['filter' => $filter, 'attributes' => $attributes];
+
+    $code                      = NativeLDAPStub::$searchCodesByBase[$base] ?? NativeLDAPStub::$searchCode;
+    NativeLDAPStub::$lastError = $code;
+
+    return NativeLDAPStub::$searchFails ? false : (object) [
+        'code'    => $code,
+        'entries' => NativeLDAPStub::$entriesByBase[$base] ?? NativeLDAPStub::$entries,
+    ];
+}
+
+function ldap_parse_result(
+    Connection $connection,
+    stdClass $result,
+    ?int &$code,
+    ?string &$matchedDn = null,
+    ?string &$message = null,
+    ?array &$referrals = null,
+    ?array &$controls = null,
+): bool {
+    $code      = $result->code;
+    $referrals = $result->referrals ?? [];
+    $controls  = $result->controls ?? [];
 
     return true;
 }
@@ -122,28 +191,30 @@ function ldap_first_reference(Connection $connection, stdClass $result): false|s
 
 function ldap_count_entries(Connection $connection, stdClass $result): int
 {
-    return count(NativeLDAPStub::$entries);
+    return count($result->entries);
 }
 
-function ldap_first_entry(Connection $connection, stdClass $result): false|int
+function ldap_first_entry(Connection $connection, stdClass $result): array|false
 {
-    return NativeLDAPStub::$entries === [] ? false : 0;
+    return $result->entries === [] ? false : ['entries' => $result->entries, 'offset' => 0];
 }
 
-function ldap_next_entry(Connection $connection, int $entry): false|int
+function ldap_next_entry(Connection $connection, array $entry): array|false
 {
-    $next = $entry + 1;
+    $entry['offset']++;
 
-    return array_key_exists($next, NativeLDAPStub::$entries) ? $next : false;
+    return isset($entry['entries'][$entry['offset']]) ? $entry : false;
 }
 
-function ldap_get_dn(Connection $connection, int $entry): string
+function ldap_get_dn(Connection $connection, array $entry): string
 {
-    return NativeLDAPStub::$entries[$entry];
+    return $entry['entries'][$entry['offset']];
 }
 
-function ldap_get_values_len(Connection $connection, int $entry, string $attribute): false
+function ldap_get_values_len(Connection $connection, array $entry, string $attribute): array|false
 {
-    // These cases only inspect distinguished names, so no attributes are returned.
-    return false;
+    $dn     = $entry['entries'][$entry['offset']];
+    $values = NativeLDAPStub::$attributesByDn[$dn][strtolower($attribute)] ?? null;
+
+    return $values === null ? false : $values + ['count' => count($values)];
 }

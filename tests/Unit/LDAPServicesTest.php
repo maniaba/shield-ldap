@@ -3,18 +3,23 @@
 declare(strict_types=1);
 
 /**
- * This file is part of CodeIgniter Shield.
+ * This file is part of Shield LDAP.
  *
- * (c) CodeIgniter Foundation <admin@codeigniter.com>
+ * Copyright (c) 2026 maniaba
+ * SPDX-License-Identifier: MIT
  *
- * For the full copyright and license information, please view
- * the LICENSE file that was distributed with this source code.
+ * See the LICENSE file for the full copyright and license information.
  */
 
 namespace Maniaba\ShieldLDAP\Tests\Unit;
 
+use CodeIgniter\Shield\Models\UserModel;
+use Config\Services as ApplicationServices;
+use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPDirectoryInterface;
 use Maniaba\ShieldLDAP\Authentication\LDAP\NativeLDAPDirectory;
 use Maniaba\ShieldLDAP\Config\Services;
+use Maniaba\ShieldLDAP\Exceptions\LDAPException;
+use Maniaba\ShieldLDAP\Exceptions\LDAPReason;
 use Maniaba\ShieldLDAP\Tests\TestCase;
 
 /**
@@ -41,5 +46,35 @@ final class LDAPServicesTest extends TestCase
         $this->assertNotSame($first, $second);
         $this->assertNotSame($first, $shared);
         $this->assertNotSame($second, $shared);
+    }
+
+    public function testUsesTheConfiguredTransportForAdministrativeServices(): void
+    {
+        $directory = Services::ldapDirectory();
+
+        $this->assertSame($directory, service('ldapUserLookup'));
+        $this->assertSame($directory, service('ldapUserEnumeration'));
+    }
+
+    public function testRejectsALookupTransportWithoutTheCapability(): void
+    {
+        ApplicationServices::injectMock('ldapDirectory', $this->createStub(LDAPDirectoryInterface::class));
+
+        try {
+            service('ldapUserLookup');
+            $this->fail('The transport lacks the lookup capability.');
+        } catch (LDAPException $exception) {
+            $this->assertSame(LDAPReason::InvalidConfiguration, $exception->kind);
+        }
+    }
+
+    public function testResolverWithExplicitProviderIsIndependentOfTheSharedResolver(): void
+    {
+        $provider = $this->createStub(UserModel::class);
+        $shared   = service('ldapUserResolver');
+
+        $this->assertSame($shared, service('ldapUserResolver'));
+        $this->assertNotSame($shared, service('ldapUserResolver', $provider));
+        $this->assertSame($shared, service('ldapUserResolver'));
     }
 }
