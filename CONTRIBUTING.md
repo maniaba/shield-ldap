@@ -67,8 +67,21 @@ documentation from `develop` and a guide for each stable `vMAJOR.MINOR.PATCH` ta
 Each stable guide has its own URL, such as `/1.2.3/`, and appears in the version
 selector. The `/latest/` address serves the development guide until the first
 stable release, then serves the latest stable guide. Tag stable releases from
-`main`. Run the workflow on `develop` to refresh the site after a publishing
-failure. The `github-pages` environment must allow deployments from `develop`.
+`main`.
+
+In the repository settings, open **Environments** and select **github-pages**.
+Under **Deployment branches and tags**, use **Selected branches and tags** and
+add an exact branch rule for `develop`.
+[GitHub Actions environment settings](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments#creating-an-environment)
+
+If the `publish` job is rejected before its steps start, check the job
+annotations for the deployment branch. After correcting the branch rule,
+rerun the failed job. To publish the guide from the current `develop` commit,
+run the workflow again from that branch.
+
+```console
+gh workflow run docs.yml --ref develop
+```
 
 ## Shield Compatibility Updates
 
