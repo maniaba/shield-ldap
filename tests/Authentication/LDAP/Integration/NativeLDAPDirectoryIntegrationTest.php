@@ -106,6 +106,49 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
         (new NativeLDAPDirectory())->testConnection($connection);
     }
 
+    #[RunInSeparateProcess]
+    public function testStartTlsCertificateVerificationOverrideIsScopedToOneConnection(): void
+    {
+        $directory  = new NativeLDAPDirectory();
+        $connection = $this->connection(verifyCertificate: false);
+
+        if (PHP_VERSION_ID < 80322 || (PHP_VERSION_ID >= 80400 && PHP_VERSION_ID < 80408)) {
+            $this->expectException(LDAPException::class);
+            $this->expectExceptionMessage('tls_verification_override_unsupported');
+
+            $directory->testBind($connection);
+
+            return;
+        }
+
+        $ca = getenv('SHIELD_LDAP_TEST_UNTRUSTED_CA');
+
+        if ($ca === false || $ca === '') {
+            $this->markTestSkipped('Set SHIELD_LDAP_TEST_UNTRUSTED_CA to another CA bundle to test certificate trust.');
+        }
+
+        putenv('LDAPTLS_CACERT=' . $ca);
+        putenv('LDAPTLS_CACERTDIR=');
+
+        $entry = $directory->authenticate($connection, self::USER_BASE_DN, '(uid=alice)', ['uid'], 'alicePassword!');
+        $this->assertSame(['alice'], $entry['attributes']['uid']);
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('certificate_verification_failed');
+
+        $directory->testConnection($this->connection());
+    }
+
+    public function testRejectsCertificateVerificationOverrideForLdaps(): void
+    {
+        $connection = $this->connection('ldaps', verifyCertificate: false);
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('tls_verification_override_unsupported');
+
+        (new NativeLDAPDirectory())->testBind($connection);
+    }
+
     public function testRejectsAmbiguousSearchBeforeCheckingPassword(): void
     {
         $connection = $this->connection();
@@ -213,7 +256,7 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
     /**
      * @param list<string> $hosts
      */
-    private function connection(string $encryption = 'starttls', array $hosts = ['127.0.0.1']): LDAPConnection
+    private function connection(string $encryption = 'starttls', array $hosts = ['127.0.0.1'], bool $verifyCertificate = true): LDAPConnection
     {
         $port = getenv($encryption === 'ldaps' ? 'SHIELD_LDAP_TEST_LDAPS_PORT' : 'SHIELD_LDAP_TEST_PORT');
 
@@ -229,6 +272,7 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
             'readerPassword!',
             $encryption,
             (int) $port,
+            verifyCertificate: $verifyCertificate,
         );
     }
 }

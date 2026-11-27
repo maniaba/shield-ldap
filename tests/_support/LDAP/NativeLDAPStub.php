@@ -30,7 +30,9 @@ final class NativeLDAPStub
      */
     public static array $operations = [];
 
-    public static int $unbound = 0;
+    public static int $unbound                    = 0;
+    public static bool $certificateOptionSucceeds = true;
+    public static int $tlsStarts                  = 0;
 
     /**
      * @var array<string, int> Endpoints whose service bind fails with the given LDAP code.

@@ -54,6 +54,7 @@ final readonly class LDAPConnection
         public bool $provisionUsers = false,
         public string $eligibilityFilter = '(objectClass=*)',
         public bool $updateProfile = true,
+        public bool $verifyCertificate = true,
     ) {
         if (preg_match('/\A[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}\z/', $id) !== 1
             || $hosts === [] || count($hosts) > 10 || ! array_is_list($hosts)

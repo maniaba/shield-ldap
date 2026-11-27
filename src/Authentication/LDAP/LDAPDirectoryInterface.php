@@ -21,7 +21,7 @@ use Maniaba\ShieldLDAP\Exceptions\LDAPException;
 interface LDAPDirectoryInterface
 {
     /**
-     * Check that the configured endpoint can establish and verify TLS.
+     * Check that the endpoint can establish TLS under the configured certificate policy.
      *
      * @throws LDAPException If no configured endpoint completes the TLS check.
      */
