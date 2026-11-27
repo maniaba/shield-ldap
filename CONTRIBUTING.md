@@ -82,5 +82,5 @@ Run the workflow manually from `main` to check immediately. To list pending
 versions locally, run the detection step in dry-run mode.
 
 ```console
-python3 .github/scripts/update-shield-compatibility.py --dry-run
+bash .github/scripts/update-shield-compatibility.sh --dry-run
 ```
