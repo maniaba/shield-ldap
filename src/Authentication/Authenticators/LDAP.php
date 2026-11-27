@@ -215,16 +215,8 @@ class LDAP extends Session
             $connection->eligibilityFilter,
         );
 
-        $ids = $entry['attributes'][strtolower($connection->externalIdAttribute)] ?? [];
-
-        if (count($ids) !== 1 || $ids[0] === '') {
-            throw new LDAPException('invalid_identity');
-        }
-
-        $externalId = strcasecmp($connection->externalIdAttribute, 'objectGUID') === 0
-            ? LDAPUserResolver::normalizeObjectGuid($ids[0])
-            : $ids[0];
-        $profile = [];
+        $externalId = LDAPUserResolver::externalId($connection, $entry['attributes']);
+        $profile    = [];
 
         foreach ($connection->profileAttributes as $field => $attribute) {
             $values = $entry['attributes'][strtolower($attribute)] ?? [];

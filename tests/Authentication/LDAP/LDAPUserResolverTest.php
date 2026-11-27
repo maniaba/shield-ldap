@@ -15,6 +15,7 @@ namespace Maniaba\ShieldLDAP\Tests\Authentication\LDAP;
 
 use CodeIgniter\Config\Factories;
 use CodeIgniter\Shield\Config\Auth;
+use CodeIgniter\Shield\Entities\User;
 use CodeIgniter\Shield\Entities\UserIdentity;
 use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Shield\Models\UserModel;
@@ -170,6 +171,158 @@ final class LDAPUserResolverTest extends DatabaseTestCase
         }
 
         $this->assertSame($user->id, $resolver->resolve('corporate', 'immutable-object')->id);
+    }
+
+    public function testInspectLinkReportsTheStateOfTheSelectedConnection(): void
+    {
+        $resolver = new LDAPUserResolver(model(UserModel::class));
+        $user     = $resolver->resolve('partner', 'partner-id', ['username' => 'existing'], true);
+
+        $this->assertSame('candidate', $resolver->inspectLink($user, 'corporate', 'old-id'));
+
+        $resolver->link('corporate', 'old-id', $user->id);
+
+        $this->assertSame('already_linked', $resolver->inspectLink($user, 'corporate', 'old-id'));
+        $this->assertSame('stale_link', $resolver->inspectLink($user, 'corporate', 'new-id'));
+    }
+
+    public function testReplaceLinkUpdatesOnlyTheSelectedIdentityAndIsIdempotent(): void
+    {
+        $users      = model(UserModel::class);
+        $identities = model(UserIdentityModel::class);
+        $resolver   = new LDAPUserResolver($users, $identities);
+        $userId     = $users->insert($users->createNewUser([
+            'username' => 'existing',
+            'email'    => 'existing@example.test',
+            'password' => 'local-password',
+        ]));
+        $resolver->link('partner', 'partner-id', $userId);
+        $resolver->link('corporate', 'old-id', $userId);
+        $oldKey = hash('sha256', "corporate\0old-id");
+        $old    = $identities->getIdentityBySecret(LDAPUserResolver::ID_TYPE, $oldKey);
+        $this->assertInstanceOf(UserIdentity::class, $old);
+        $identities->update($old->id, new UserIdentity(['extra' => 'Local metadata']));
+
+        $this->assertTrue($resolver->replaceLink('corporate', 'new-id', $userId, 'existing'));
+        $this->assertFalse($resolver->replaceLink('corporate', 'new-id', $userId, 'existing'));
+        $this->assertNull($identities->getIdentityBySecret(LDAPUserResolver::ID_TYPE, $oldKey));
+
+        $updated = $identities->find($old->id);
+        $this->assertInstanceOf(UserIdentity::class, $updated);
+        $this->assertSame(hash('sha256', "corporate\0new-id"), $updated->secret);
+        $this->assertSame('Local metadata', $updated->extra);
+        $this->assertSame($userId, $resolver->resolve('partner', 'partner-id')->id);
+
+        $resolved = $resolver->resolve('corporate', 'new-id');
+        $this->assertSame($userId, $resolved->id);
+        $this->assertSame('existing@example.test', $resolved->email);
+        $this->assertTrue(password_verify('local-password', $resolved->password_hash));
+        $this->seeNumRecords(3, $this->tables['identities'], ['user_id' => $userId]);
+    }
+
+    public function testCannotReplaceMissingLink(): void
+    {
+        $resolver = new LDAPUserResolver(model(UserModel::class));
+        $user     = $resolver->resolve('partner', 'partner-id', ['username' => 'existing'], true);
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('identity_conflict');
+
+        $resolver->replaceLink('corporate', 'new-id', $user->id, 'existing');
+    }
+
+    public function testCannotReplaceLinkAfterLocalUsernameChanges(): void
+    {
+        $users    = model(UserModel::class);
+        $resolver = new LDAPUserResolver($users);
+        $user     = $resolver->resolve('corporate', 'old-id', ['username' => 'existing'], true);
+        $users->update($user->id, ['username' => 'renamed']);
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('identity_conflict');
+
+        $resolver->replaceLink('corporate', 'new-id', $user->id, 'existing');
+    }
+
+    public function testCannotInspectOrReplaceAnAmbiguousLink(): void
+    {
+        $resolver = new LDAPUserResolver(model(UserModel::class));
+        $user     = $resolver->resolve('corporate', 'old-id', ['username' => 'existing'], true);
+        $resolver->link('corporate', 'new-id', $user->id);
+
+        try {
+            $resolver->inspectLink($user, 'corporate', 'new-id');
+            $this->fail('A user with multiple links for the connection was accepted.');
+        } catch (LDAPException $exception) {
+            $this->assertSame('identity_conflict', $exception->reason);
+        }
+
+        $this->expectException(LDAPException::class);
+        $this->expectExceptionMessage('identity_conflict');
+
+        $resolver->replaceLink('corporate', 'new-id', $user->id, 'existing');
+    }
+
+    public function testCannotReplaceLinkWithAnIdentifierOwnedByAnotherUser(): void
+    {
+        $resolver = new LDAPUserResolver(model(UserModel::class));
+        $user     = $resolver->resolve('corporate', 'old-id', ['username' => 'existing'], true);
+        $another  = $resolver->resolve('corporate', 'new-id', ['username' => 'another'], true);
+
+        try {
+            $resolver->replaceLink('corporate', 'new-id', $user->id, 'existing');
+            $this->fail('A link was replaced using a directory identifier owned by another user.');
+        } catch (LDAPException $exception) {
+            $this->assertSame('identity_conflict', $exception->reason);
+        }
+
+        $this->assertSame($user->id, $resolver->resolve('corporate', 'old-id')->id);
+        $this->assertSame($another->id, $resolver->resolve('corporate', 'new-id')->id);
+    }
+
+    public function testReplacementDetectsAChangedSecretBeforeWrite(): void
+    {
+        $users      = model(UserModel::class);
+        $identities = model(UserIdentityModel::class);
+        $resolver   = new LDAPUserResolver($users, $identities);
+        $user       = $resolver->resolve('corporate', 'current-id', ['username' => 'existing'], true);
+
+        $staleRead = $this->getMockBuilder(UserIdentityModel::class)->onlyMethods(['getIdentitiesByTypes'])->getMock();
+        $staleRead->expects($this->once())->method('getIdentitiesByTypes')->willReturnCallback(
+            static function (User $user, array $types) use ($identities): array {
+                $links            = $identities->getIdentitiesByTypes($user, $types);
+                $links[0]->secret = hash('sha256', "corporate\0outdated-id");
+
+                return $links;
+            },
+        );
+
+        try {
+            (new LDAPUserResolver($users, $staleRead))->replaceLink('corporate', 'new-id', $user->id, 'existing');
+            $this->fail('The replacement overwrote a link changed since the read.');
+        } catch (LDAPException $exception) {
+            $this->assertSame('synchronization_conflict', $exception->reason);
+        }
+
+        $this->assertSame($user->id, $resolver->resolve('corporate', 'current-id')->id);
+    }
+
+    public function testReplacementRollsBackWhenTheUpdatedIdentityCannotBeRead(): void
+    {
+        $users    = model(UserModel::class);
+        $resolver = new LDAPUserResolver($users);
+        $user     = $resolver->resolve('corporate', 'old-id', ['username' => 'existing'], true);
+        $noRead   = $this->getMockBuilder(UserIdentityModel::class)->onlyMethods(['getIdentityBySecret'])->getMock();
+        $noRead->expects($this->exactly(2))->method('getIdentityBySecret')->willReturn(null);
+
+        try {
+            (new LDAPUserResolver($users, $noRead))->replaceLink('corporate', 'new-id', $user->id, 'existing');
+            $this->fail('The replacement succeeded with no corresponding identity.');
+        } catch (LDAPException $exception) {
+            $this->assertSame('synchronization_conflict', $exception->reason);
+        }
+
+        $this->assertSame($user->id, $resolver->resolve('corporate', 'old-id')->id);
     }
 
     public function testUnlinkedUserIsRejectedWhenProvisioningIsOff(): void
