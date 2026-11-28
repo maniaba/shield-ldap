@@ -19,6 +19,7 @@ objectClass: inetOrgPerson
 cn: Alice Shared
 sn: Shared
 uid: alice
+mail: alice@example.test
 userPassword: alicePassword!
 
 dn: uid=bob,ou=people,dc=example,dc=test

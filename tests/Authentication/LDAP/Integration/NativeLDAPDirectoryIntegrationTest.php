@@ -126,6 +126,7 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
         $connection = $this->connection(
             groupMappings: ['user' => 'cn=shield-users,' . self::GROUP_BASE_DN],
             syncGroupsOnLogin: false,
+            contactEmailAttribute: 'mail',
         );
         $directory = new NativeLDAPDirectory();
         $login     = $directory->authenticate($connection, self::USER_BASE_DN, '(uid=alice)', ['uid'], 'alicePassword!');
@@ -141,6 +142,16 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
         foreach ($entries as $entry) {
             $this->assertSame(['entryuuid'], array_keys($entry['attributes']));
         }
+    }
+
+    public function testProfileScanRequestsTheConfiguredContactAttribute(): void
+    {
+        $connection = $this->connection(contactEmailAttribute: 'mail');
+        $entries    = iterator_to_array((new NativeLDAPDirectory())->scanUsers($connection, 1));
+        $attributes = array_column($entries, 'attributes', 'dn');
+
+        $this->assertSame(['alice@example.test'], $attributes['uid=alice,' . self::USER_BASE_DN]['mail']);
+        $this->assertArrayNotHasKey('mail', $attributes['uid=bob,' . self::USER_BASE_DN]);
     }
 
     public function testRejectsWrongCertificateHostname(): void
@@ -335,6 +346,7 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
         bool $verifyCertificate = true,
         array $groupMappings = [],
         bool $syncGroupsOnLogin = true,
+        ?string $contactEmailAttribute = null,
     ): LDAPConnection {
         $port = getenv($encryption === 'ldaps' ? 'SHIELD_LDAP_TEST_LDAPS_PORT' : 'SHIELD_LDAP_TEST_PORT');
 
@@ -353,6 +365,7 @@ final class NativeLDAPDirectoryIntegrationTest extends TestCase
             verifyCertificate: $verifyCertificate,
             groupMappings: $groupMappings,
             syncGroupsOnLogin: $syncGroupsOnLogin,
+            contactEmailAttribute: $contactEmailAttribute,
         );
     }
 }

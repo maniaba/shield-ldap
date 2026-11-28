@@ -32,8 +32,8 @@ Mapped attributes must have at most one value. If a mapped attribute
 has no value, the mapping skips that field. Set `'updateProfile' => false`
 to apply the mapping only when provisioning. The mapper leaves
 unmapped fields and Shield's password and email identities under
-application control. Store directory contact information in a dedicated
-profile field such as `directory_email`.
+application control. For a contact associated with the LDAP link, use
+[Directory Contact Email](#directory-contact-email).
 
 LDAP provisioning assigns Shield's configured `AuthGroups.defaultGroup` to new
 users, as Shield's `shield:user create` does. Provisioning does not trigger the
@@ -47,6 +47,37 @@ standard login event.
     through the application's trusted workflow. For login actions, use a
     contact identity verified by your application or an action that supports
     directory-only users. [Shield authentication actions](https://github.com/codeigniter4/shield/blob/develop/docs/references/authentication/auth_actions.md)
+
+## Directory Contact Email
+
+Set `contactEmailAttribute` on the LDAP connection to keep a contact address
+from the directory.
+
+```php
+'contactEmailAttribute' => 'mail',
+```
+
+Retrieve the last synchronized contact for an existing Shield user and a
+connection ID.
+
+```php
+$email = service('ldapUserResolver')->getContactEmail($user, 'corporate');
+```
+
+Use this address for display and routine notifications. Shield's Email2FA,
+Magic Link, and password recovery use the application's Shield email identity.
+The contact belongs to one LDAP link. The lookup returns `null` when there is
+no contact or more than one link for the selected user and connection.
+
+Provisioning reads the mapped contact for new accounts. Existing profiles
+refresh it at sign-in when `syncProfileOnLogin` and `updateProfile` are enabled.
+The regular `shield:ldap-sync` command refreshes it on links with `updateProfile`
+enabled, including deployments that schedule all profile updates through Spark.
+A verified LDAP entry with a missing, invalid, or multivalued address clears
+the stored contact. A failed search leaves the previous address available.
+Replacing a link clears its old contact until the new account is synchronized.
+Set the option to `null` to stop contact updates. Lookups can still return the
+last saved contact.
 
 ## Synchronizing Users from LDAP
 

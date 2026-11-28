@@ -64,15 +64,15 @@ final readonly class LDAPSyncWorkflow
             }
 
             while (($line = fgets($stage)) !== false) {
-                [$externalId, $profile] = $this->decodeUser($line);
-                $username               = $profile['username'] ?? null;
+                [$externalId, $profile, $contactEmail] = $this->decodeUser($line);
+                $username                              = $profile['username'] ?? null;
 
                 try {
                     if ($username !== null && ($names[strtolower($username)] ?? 0) > 1) {
                         throw new LDAPException(LDAPReason::IdentityConflict);
                     }
 
-                    $plan   = $this->profiles->plan($connection, $externalId, $profile, $localAccounts);
+                    $plan   = $this->profiles->plan($connection, $externalId, $profile, $localAccounts, $contactEmail);
                     $status = $apply ? $this->profiles->apply($plan) : $plan->status;
                 } catch (LDAPException $exception) {
                     $this->reportUserConflict($exception, $reportConflict);
@@ -142,7 +142,12 @@ final readonly class LDAPSyncWorkflow
                 }
 
                 // Use a stream so large scans can spill into temporary storage.
-                $line = json_encode([base64_encode($externalId), array_map(base64_encode(...), $profile)], JSON_THROW_ON_ERROR) . "\n";
+                $contactEmail = LDAPContactEmail::fromDirectory($connection, $entry['attributes']);
+                $line         = json_encode([
+                    base64_encode($externalId),
+                    array_map(base64_encode(...), $profile),
+                    $contactEmail === null ? null : [$contactEmail->address],
+                ], JSON_THROW_ON_ERROR) . "\n";
                 if (fwrite($stage, $line) !== strlen($line)) {
                     throw new LDAPException(LDAPReason::SynchronizationConflict);
                 }
@@ -157,7 +162,7 @@ final readonly class LDAPSyncWorkflow
     }
 
     /**
-     * @return array{string, array<string, string>}
+     * @return array{string, array<string, string>, ?LDAPContactEmail}
      */
     private function decodeUser(string $line): array
     {
@@ -167,7 +172,7 @@ final readonly class LDAPSyncWorkflow
             throw new LDAPException(LDAPReason::SynchronizationConflict, $exception);
         }
 
-        if (! is_array($row) || ! is_string($row[0] ?? null) || ! is_array($row[1] ?? null)) {
+        if (! is_array($row) || ! is_string($row[0] ?? null) || ! is_array($row[1] ?? null) || ! array_key_exists(2, $row)) {
             throw new LDAPException(LDAPReason::SynchronizationConflict);
         }
 
@@ -191,7 +196,13 @@ final readonly class LDAPSyncWorkflow
             $profile[$field] = $value;
         }
 
-        return [$externalId, $profile];
+        $contact = $row[2];
+        if ($contact !== null && (! is_array($contact) || ! array_is_list($contact) || count($contact) !== 1
+                                                       || ($contact[0] !== null && ! is_string($contact[0])))) {
+            throw new LDAPException(LDAPReason::SynchronizationConflict);
+        }
+
+        return [$externalId, $profile, $contact === null ? null : new LDAPContactEmail($contact[0])];
     }
 
     /**

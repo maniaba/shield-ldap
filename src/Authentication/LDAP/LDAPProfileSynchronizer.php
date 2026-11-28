@@ -15,6 +15,7 @@ namespace Maniaba\ShieldLDAP\Authentication\LDAP;
 
 use Closure;
 use CodeIgniter\Shield\Entities\User;
+use CodeIgniter\Shield\Entities\UserIdentity;
 use CodeIgniter\Shield\Models\UserIdentityModel;
 use CodeIgniter\Shield\Models\UserModel;
 use Maniaba\ShieldLDAP\Exceptions\LDAPException;
@@ -23,6 +24,8 @@ use Throwable;
 
 /**
  * Provisions eligible directory users and synchronizes their mapped local fields.
+ *
+ * @phpstan-type ProfileChange array{status: SyncStatus, user: ?User, fields: array<string, string|null>, loginFailure?: LDAPReason, contact?: array{identity: ?UserIdentity, extra: ?string}}
  */
 final readonly class LDAPProfileSynchronizer
 {
@@ -53,18 +56,19 @@ final readonly class LDAPProfileSynchronizer
         array $localAccounts = [],
         ?array $groups = null,
         ?Closure $provisioningProfile = null,
+        ?LDAPContactEmail $contactEmail = null,
     ): User {
         $key     = LDAPIdentityPersistence::key($connectionId, $externalId);
         $profile = $this->validateProfile($profile);
 
-        return $this->identities->transaction(function () use ($connectionId, $key, $profile, $provision, $updateProfile, $localAccounts, $groups, $provisioningProfile): User {
-            $change = $this->prepareChange($key, $profile, $provision, $updateProfile, $localAccounts, $provisioningProfile);
+        return $this->identities->transaction(function () use ($connectionId, $key, $profile, $provision, $updateProfile, $localAccounts, $groups, $provisioningProfile, $contactEmail): User {
+            $change = $this->prepareChange($key, $profile, $provision, $updateProfile, $localAccounts, $provisioningProfile, $contactEmail);
 
             if (isset($change['loginFailure'])) {
                 throw new LDAPException($change['loginFailure']);
             }
 
-            $user = $this->saveProfile($connectionId, $key, $change['user'], $change['fields']);
+            $user = $this->saveChange($connectionId, $key, $change);
 
             if ($groups !== null && ! $user->isBanned() && $user->isActivated()) {
                 (new LDAPGroupSynchronizer())->synchronize($this->users->builder()->db(), $user, $connectionId, $groups);
@@ -80,15 +84,20 @@ final readonly class LDAPProfileSynchronizer
      * @param array<string, string|null>   $profile
      * @param array<array-key, int|string> $localAccounts
      */
-    public function plan(LDAPConnection $connection, string $externalId, array $profile, array $localAccounts): LDAPProfilePlan
-    {
+    public function plan(
+        LDAPConnection $connection,
+        string $externalId,
+        array $profile,
+        array $localAccounts,
+        ?LDAPContactEmail $contactEmail = null,
+    ): LDAPProfilePlan {
         $key     = LDAPIdentityPersistence::key($connection->id, $externalId);
         $profile = $this->validateProfile($profile);
 
         try {
-            $change = $this->prepareSynchronization($connection, $key, $profile, $localAccounts);
+            $change = $this->prepareSynchronization($connection, $key, $profile, $localAccounts, $contactEmail);
 
-            return new LDAPProfilePlan($connection, $externalId, $profile, $localAccounts, $change['status']);
+            return new LDAPProfilePlan($connection, $externalId, $profile, $localAccounts, $change['status'], $contactEmail);
         } catch (LDAPException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -105,9 +114,9 @@ final readonly class LDAPProfileSynchronizer
         $profile = $this->validateProfile($plan->profile);
 
         return $this->identities->transaction(function () use ($plan, $key, $profile): SyncStatus {
-            $change = $this->prepareSynchronization($plan->connection, $key, $profile, $plan->localAccounts);
-            if ($change['fields'] !== []) {
-                $this->saveProfile($plan->connection->id, $key, $change['user'], $change['fields']);
+            $change = $this->prepareSynchronization($plan->connection, $key, $profile, $plan->localAccounts, $plan->contactEmail);
+            if ($change['status'] === SyncStatus::Create || $change['status'] === SyncStatus::Update) {
+                $this->saveChange($plan->connection->id, $key, $change);
             }
 
             return $change['status'];
@@ -118,11 +127,16 @@ final readonly class LDAPProfileSynchronizer
      * @param array<string, string|null>   $profile
      * @param array<array-key, int|string> $localAccounts
      *
-     * @return array{status: SyncStatus, user: User|null, fields: array<string, string|null>, loginFailure?: LDAPReason}
+     * @return ProfileChange
      */
-    private function prepareSynchronization(LDAPConnection $connection, string $key, array $profile, array $localAccounts): array
-    {
-        $change = $this->prepareChange($key, $profile, $connection->provisionUsers, $connection->updateProfile, $localAccounts);
+    private function prepareSynchronization(
+        LDAPConnection $connection,
+        string $key,
+        array $profile,
+        array $localAccounts,
+        ?LDAPContactEmail $contactEmail,
+    ): array {
+        $change = $this->prepareChange($key, $profile, $connection->provisionUsers, $connection->updateProfile, $localAccounts, contactEmail: $contactEmail);
         if ($change['fields'] !== []) {
             $this->checkWritableFields($change['fields']);
         }
@@ -135,7 +149,7 @@ final readonly class LDAPProfileSynchronizer
      * @param array<array-key, int|string>            $localAccounts
      * @param (Closure(): array<string, string>)|null $provisioningProfile
      *
-     * @return array{status: SyncStatus, user: User|null, fields: array<string, string|null>, loginFailure?: LDAPReason}
+     * @return ProfileChange
      */
     private function prepareChange(
         string $key,
@@ -144,6 +158,7 @@ final readonly class LDAPProfileSynchronizer
         bool $updateProfile,
         array $localAccounts,
         ?Closure $provisioningProfile = null,
+        ?LDAPContactEmail $contactEmail = null,
     ): array {
         $identity = $this->identities->findIdentity($key);
         $user     = $identity === null ? null : $this->identities->findUser($identity->user_id);
@@ -184,13 +199,20 @@ final readonly class LDAPProfileSynchronizer
             $this->checkUsername($profile['username'], $identity?->user_id);
         }
 
-        $status = match (true) {
-            $user === null  => SyncStatus::Create,
-            $profile !== [] => SyncStatus::Update,
-            default         => SyncStatus::Unchanged,
+        $extra        = $identity?->extra;
+        $updatedExtra = $contactEmail === null ? $extra : $contactEmail->updateExtra($extra);
+        $status       = match (true) {
+            $user === null                              => SyncStatus::Create,
+            $profile !== [] || $updatedExtra !== $extra => SyncStatus::Update,
+            default                                     => SyncStatus::Unchanged,
         };
 
-        return ['status' => $status, 'user' => $user, 'fields' => $profile];
+        $change = ['status' => $status, 'user' => $user, 'fields' => $profile];
+        if ($updatedExtra !== $extra) {
+            $change['contact'] = ['identity' => $identity, 'extra' => $updatedExtra];
+        }
+
+        return $change;
     }
 
     /**
@@ -213,10 +235,14 @@ final readonly class LDAPProfileSynchronizer
     }
 
     /**
-     * @param array<string, string|null> $profile
+     * @param ProfileChange $change
      */
-    private function saveProfile(string $connectionId, string $key, ?User $user, array $profile): User
+    private function saveChange(string $connectionId, string $key, array $change): User
     {
+        $user    = $change['user'];
+        $profile = $change['fields'];
+        $contact = $change['contact'] ?? null;
+
         if ($user === null) {
             $userId = $this->users->insert($profile);
             if ($userId === true) {
@@ -224,10 +250,14 @@ final readonly class LDAPProfileSynchronizer
             }
 
             $user = $this->readBackProfile($userId, $profile);
-            $this->identities->create($connectionId, $key, $userId);
+            $this->identities->create($connectionId, $key, $userId, $contact['extra'] ?? null);
             $this->users->addToDefaultGroup($user);
 
             return $user;
+        }
+
+        if ($contact !== null && $contact['identity'] !== null) {
+            $this->identities->updateExtra($contact['identity'], $contact['extra']);
         }
 
         if ($profile === []) {

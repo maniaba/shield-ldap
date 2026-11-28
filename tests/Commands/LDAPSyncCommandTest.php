@@ -110,6 +110,44 @@ final class LDAPSyncCommandTest extends DatabaseTestCase
         $this->assertTrue(password_verify('local-test-password', $identity->secret2));
     }
 
+    public function testPreviewAndApplySynchronizeOnlyTheContactWhenTheProfileMatches(): void
+    {
+        $this->config->connections['corporate']['contactEmailAttribute'] = 'mail';
+        $users                                                           = auth()->getProvider();
+        $resolver                                                        = new LDAPUserResolver($users);
+        $user                                                            = $resolver->resolve('corporate', 'existing-id', ['username' => 'existing'], true);
+        $user->createEmailIdentity(['email' => 'local@example.test', 'password' => 'local-test-password']);
+
+        $valid                       = self::entry('existing', 'existing-id');
+        $valid['attributes']['mail'] = ['contact@example.test'];
+        $missing                     = self::entry('existing', 'existing-id');
+        $this->directory->expects($this->exactly(5))->method('scanUsers')
+            ->willReturnOnConsecutiveCalls([$valid], [$valid], [$valid], [$missing], [$missing]);
+
+        $preview = ['corporate'];
+        $apply   = ['corporate', 'apply' => null];
+        $this->assertSame(EXIT_SUCCESS, service('commands')->run(self::COMMAND, $preview));
+        $this->assertStringContainsString('would_create=0 would_update=1', $this->getStreamFilterBuffer());
+        $this->assertNull($resolver->getContactEmail($user, 'corporate'));
+
+        $this->assertSame(EXIT_SUCCESS, service('commands')->run(self::COMMAND, $apply));
+        $this->assertStringContainsString('created=0 updated=1', $this->getStreamFilterBuffer());
+        $this->assertStringNotContainsString('contact@example.test', $this->getStreamFilterBuffer());
+        $this->assertSame('contact@example.test', $resolver->getContactEmail($user, 'corporate'));
+        $stored = $users->findById($user->id);
+        $this->assertNotNull($stored);
+        $this->assertSame('local@example.test', $stored->email);
+        $this->assertTrue(password_verify('local-test-password', $stored->password_hash));
+
+        $this->assertSame(EXIT_SUCCESS, service('commands')->run(self::COMMAND, $apply));
+        $this->assertStringContainsString('updated=0 unchanged=1', $this->getStreamFilterBuffer());
+        $this->assertSame(EXIT_SUCCESS, service('commands')->run(self::COMMAND, $preview));
+        $this->assertStringContainsString('would_update=1', $this->getStreamFilterBuffer());
+        $this->assertSame('contact@example.test', $resolver->getContactEmail($user, 'corporate'));
+        $this->assertSame(EXIT_SUCCESS, service('commands')->run(self::COMMAND, $apply));
+        $this->assertNull($resolver->getContactEmail($user, 'corporate'));
+    }
+
     public function testConflictWithUnlinkedLocalUsernameDoesNotWriteAnIdentity(): void
     {
         model(UserModel::class)->insert(['username' => 'alice', 'active' => true]);

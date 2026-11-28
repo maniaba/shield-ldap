@@ -23,8 +23,8 @@ interface LDAPUserEnumerationInterface extends LDAPDirectoryInterface
     /**
      * Enumerate eligible users in the configured search bases over verified TLS.
      *
-     * Returned attribute names are lowercase. The configured ID and profile
-     * attributes are included when present.
+     * Returned attribute names are lowercase. Include the configured ID,
+     * profile attributes, and optional contact attribute when present.
      *
      * @return iterable<int, array{dn: string, attributes: array<string, list<string>>, matchedGroups?: list<string>}>
      *

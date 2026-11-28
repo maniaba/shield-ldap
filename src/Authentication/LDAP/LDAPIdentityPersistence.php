@@ -110,17 +110,41 @@ final readonly class LDAPIdentityPersistence
     /**
      * Store the link and verify its owner before the calling transaction commits.
      */
-    public function create(string $connectionId, string $key, int|string $userId): void
+    public function create(string $connectionId, string $key, int|string $userId, ?string $extra = null): void
     {
         $this->identities->create(new UserIdentity([
             'user_id' => $userId,
             'type'    => self::TYPE,
             'name'    => $connectionId,
             'secret'  => $key,
+            ...($extra === null ? [] : ['extra' => $extra]),
         ]));
 
         $identity = $this->findIdentity($key);
-        if ($identity === null || (string) $identity->user_id !== (string) $userId) {
+        if ($identity === null || (string) $identity->user_id !== (string) $userId || ($extra !== null && $identity->extra !== $extra)) {
+            throw new LDAPException(LDAPReason::SynchronizationConflict);
+        }
+    }
+
+    /**
+     * Write contact metadata only while the original LDAP link and metadata still match.
+     */
+    public function updateExtra(UserIdentity $identity, ?string $extra): void
+    {
+        if ($identity->id === null) {
+            throw new LDAPException(LDAPReason::IdentityConflict);
+        }
+
+        $this->identities->where([
+            'user_id' => $identity->user_id,
+            'type'    => self::TYPE,
+            'name'    => $identity->name,
+            'secret'  => $identity->secret,
+        ]);
+        $this->expectExtra($identity->extra);
+        $this->identities->update($identity->id, new UserIdentity(['extra' => $extra]));
+
+        if ($this->identities->builder()->db()->affectedRows() !== 1) {
             throw new LDAPException(LDAPReason::SynchronizationConflict);
         }
     }
@@ -134,12 +158,19 @@ final readonly class LDAPIdentityPersistence
             throw new LDAPException(LDAPReason::IdentityConflict);
         }
 
+        $extra   = (new LDAPContactEmail(null))->updateExtra($identity->extra);
+        $changes = ['secret' => $key];
+        if ($extra !== $identity->extra) {
+            $changes['extra'] = $extra;
+        }
+
+        $this->expectExtra($identity->extra);
         $this->identities->where([
             'user_id' => $userId,
             'type'    => self::TYPE,
             'name'    => $connectionId,
             'secret'  => $identity->secret,
-        ])->update($identity->id, new UserIdentity(['secret' => $key]));
+        ])->update($identity->id, new UserIdentity($changes));
 
         if ($this->identities->builder()->db()->affectedRows() !== 1) {
             throw new LDAPException(LDAPReason::SynchronizationConflict);
@@ -150,9 +181,29 @@ final readonly class LDAPIdentityPersistence
             || (string) $updated->user_id !== (string) $userId
             || $updated->name !== $connectionId
             || $updated->secret !== $key
+            || (array_key_exists('extra', $changes) && $updated->extra !== $extra)
         ) {
             throw new LDAPException(LDAPReason::SynchronizationConflict);
         }
+    }
+
+    private function expectExtra(?string $extra): void
+    {
+        if ($extra === null) {
+            $this->identities->where('extra', null);
+
+            return;
+        }
+
+        $database = $this->identities->builder()->db();
+        $column   = $database->protectIdentifiers('extra');
+        $field    = match ($database->getPlatform()) {
+            'MySQLi' => 'CAST(' . $column . ' AS BINARY)',
+            'SQLSRV' => 'CAST(' . $column . ' AS NVARCHAR(MAX))',
+            default  => 'extra',
+        };
+
+        $this->identities->where($field . ' =', $extra);
     }
 
     /**

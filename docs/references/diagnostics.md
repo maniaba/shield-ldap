@@ -148,6 +148,9 @@ An implementation used for sign-in must verify the submitted password over
 a trusted encrypted connection, require one matching user, and recheck the
 same immutable identity against the eligibility filter. Return the entry DN
 and the requested attribute values using lowercase keys and lists of strings.
+Include the requested `contactEmailAttribute` in sign-in and profile scan
+results whenever the entry has that attribute. Report incomplete LDAP reads
+as errors so they cannot be interpreted as a missing contact.
 For a connection with `syncGroupsOnLogin` enabled and a populated
 `groupMappings` array, return a `matchedGroups` list of the Shield group keys
 whose LDAP membership you verified for that same user.

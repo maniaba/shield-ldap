@@ -20,6 +20,7 @@ use CodeIgniter\Shield\Authentication\Passwords;
 use CodeIgniter\Shield\Entities\User;
 use CodeIgniter\Shield\Models\UserModel;
 use CodeIgniter\Shield\Result;
+use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPContactEmail;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPDirectoryInterface;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPFilter;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;
@@ -214,7 +215,7 @@ class LDAP extends Session
         }
 
         $includeProfile = $connection->syncProfileOnLogin || $connection->provisionUsers;
-        $attributes     = $includeProfile ? array_values($connection->profileAttributes) : [];
+        $attributes     = $includeProfile ? $connection->profileAttributeNames() : [];
         $filter         = LDAPFilter::all($connection->loginFilter, LDAPFilter::any(...$predicates));
         $entry          = $directory->authenticate(
             $connection,
@@ -246,6 +247,7 @@ class LDAP extends Session
             $this->localAccounts,
             $matchedGroups,
             ! $connection->syncProfileOnLogin && $connection->provisionUsers ? $readProfile : null,
+            $includeProfile ? LDAPContactEmail::fromDirectory($connection, $entry['attributes']) : null,
         );
     }
 

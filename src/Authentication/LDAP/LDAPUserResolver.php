@@ -59,8 +59,17 @@ final readonly class LDAPUserResolver
         array $localAccounts = [],
         ?array $groups = null,
         ?Closure $provisioningProfile = null,
+        ?LDAPContactEmail $contactEmail = null,
     ): User {
-        return $this->profiles->resolve($connectionId, $externalId, $profile, $provision, $updateProfile, $localAccounts, $groups, $provisioningProfile);
+        return $this->profiles->resolve($connectionId, $externalId, $profile, $provision, $updateProfile, $localAccounts, $groups, $provisioningProfile, $contactEmail);
+    }
+
+    /**
+     * Return the last synchronized directory contact for one unambiguous LDAP link.
+     */
+    public function getContactEmail(User $user, string $connectionId): ?string
+    {
+        return $this->links->getContactEmail($user, $connectionId);
     }
 
     /**

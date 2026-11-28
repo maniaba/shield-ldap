@@ -36,6 +36,23 @@ final readonly class LDAPLinkService
     }
 
     /**
+     * Read a contact scoped to this user's single link on the supplied connection.
+     */
+    public function getContactEmail(User $user, string $connectionId): ?string
+    {
+        if ($user->id === null) {
+            return null;
+        }
+
+        $links = array_values(array_filter(
+            $this->identities->identitiesForUser($user),
+            static fn (UserIdentity $identity): bool => $identity->name === $connectionId,
+        ));
+
+        return count($links) === 1 ? LDAPContactEmail::read($links[0]->extra) : null;
+    }
+
+    /**
      * Link the selected Shield user after the caller authorizes and verifies the external identity.
      *
      * Supply an expected username when the selection comes from a username lookup.

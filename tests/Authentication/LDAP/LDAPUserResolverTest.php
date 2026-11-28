@@ -24,6 +24,7 @@ use CodeIgniter\Shield\Models\UserModel;
 use Config\Database;
 use Config\Services;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPConnection;
+use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPContactEmail;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPLinkService;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPProfileSynchronizer;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;
@@ -382,6 +383,34 @@ final class LDAPUserResolverTest extends DatabaseTestCase
         $this->seeNumRecords(3, $this->tables['identities'], ['user_id' => $userId]);
     }
 
+    public function testReplacingALinkClearsOnlyItsDirectoryContact(): void
+    {
+        $users      = model(UserModel::class);
+        $identities = model(UserIdentityModel::class);
+        $resolver   = new LDAPUserResolver($users, $identities);
+        $user       = $resolver->resolve('corporate', 'old-id', ['username' => 'existing'], true);
+        $key        = hash('sha256', "corporate\0old-id");
+        $identity   = $identities->getIdentityBySecret(LDAPUserResolver::ID_TYPE, $key);
+        $this->assertInstanceOf(UserIdentity::class, $identity);
+        $identities->update($identity->id, new UserIdentity(['extra' => '{"application":{"note":"keep"}}']));
+
+        $resolver->resolve('corporate', 'old-id', contactEmail: new LDAPContactEmail('first@example.test'));
+        $resolver->resolve('corporate', 'old-id', contactEmail: new LDAPContactEmail('second@example.test'));
+        $resolver->link('partner', 'partner-id', $user->id);
+        $resolver->resolve('partner', 'partner-id', contactEmail: new LDAPContactEmail('partner@example.test'));
+        $this->assertSame('second@example.test', $resolver->getContactEmail($user, 'corporate'));
+
+        $this->assertTrue($resolver->replaceLink('corporate', 'new-id', $user->id, 'existing'));
+        $this->assertNull($resolver->getContactEmail($user, 'corporate'));
+        $this->assertSame('partner@example.test', $resolver->getContactEmail($user, 'partner'));
+        $this->assertSame('{"application":{"note":"keep"}}', $identities->find($identity->id)->extra);
+        $this->assertNull($identities->find($identity->id)->secret2);
+
+        $resolver->resolve('corporate', 'new-id', contactEmail: new LDAPContactEmail('new@example.test'));
+        $resolver->link('corporate', 'ambiguous-id', $user->id);
+        $this->assertNull($resolver->getContactEmail($user, 'corporate'));
+    }
+
     public function testCannotReplaceMissingLink(): void
     {
         $resolver = new LDAPUserResolver(model(UserModel::class));
@@ -467,6 +496,34 @@ final class LDAPUserResolverTest extends DatabaseTestCase
         }
 
         $this->assertSame($user->id, $resolver->resolve('corporate', 'current-id')->id);
+    }
+
+    public function testReplacementRejectsAContactAddedAfterItsIdentityWasRead(): void
+    {
+        $users      = model(UserModel::class);
+        $identities = model(UserIdentityModel::class);
+        $resolver   = new LDAPUserResolver($users, $identities);
+        $user       = $resolver->resolve('corporate', 'old-id', ['username' => 'existing'], true, contactEmail: new LDAPContactEmail('added@example.test'));
+
+        $staleRead = $this->getMockBuilder(UserIdentityModel::class)->onlyMethods(['getIdentitiesByTypes'])->getMock();
+        $staleRead->expects($this->once())->method('getIdentitiesByTypes')->willReturnCallback(
+            static function (User $user, array $types) use ($identities): array {
+                $links           = $identities->getIdentitiesByTypes($user, $types);
+                $links[0]->extra = null;
+
+                return $links;
+            },
+        );
+
+        try {
+            (new LDAPUserResolver($users, $staleRead))->replaceLink('corporate', 'new-id', $user->id, 'existing');
+            $this->fail('The replacement accepted stale contact metadata.');
+        } catch (LDAPException $exception) {
+            $this->assertSame('synchronization_conflict', $exception->reason);
+        }
+
+        $this->assertSame($user->id, $resolver->resolve('corporate', 'old-id')->id);
+        $this->assertSame('added@example.test', $resolver->getContactEmail($user, 'corporate'));
     }
 
     public function testReplacementRollsBackWhenTheUpdatedIdentityCannotBeRead(): void

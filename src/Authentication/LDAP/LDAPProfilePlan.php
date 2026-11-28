@@ -30,6 +30,7 @@ final readonly class LDAPProfilePlan
         public array $profile,
         public array $localAccounts,
         public SyncStatus $status,
+        public ?LDAPContactEmail $contactEmail = null,
     ) {
     }
 }

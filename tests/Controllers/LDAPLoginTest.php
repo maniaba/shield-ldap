@@ -26,6 +26,7 @@ use CodeIgniter\Test\FeatureTestTrait;
 use Config\Services;
 use Maniaba\ShieldLDAP\Authentication\Authenticators\LDAP;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPConnection;
+use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPContactEmail;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPDirectoryInterface;
 use Maniaba\ShieldLDAP\Authentication\LDAP\LDAPUserResolver;
 use Maniaba\ShieldLDAP\Authentication\LDAP\MultiBaseLDAPDirectoryInterface;
@@ -96,7 +97,14 @@ final class LDAPLoginTest extends DatabaseTestCase
 
     public function testDirectoryLoginUsesShieldSessionAndDoesNotRememberPassword(): void
     {
-        $this->directory->expects($this->once())->method('authenticate')->with($this->isInstanceOf(LDAPConnection::class), 'dc=example,dc=com')->willReturn($this->entry());
+        $entry                       = $this->entry();
+        $entry['attributes']['mail'] = ['ignored@example.test'];
+        $this->directory->expects($this->once())->method('authenticate')->with(
+            $this->isInstanceOf(LDAPConnection::class),
+            'dc=example,dc=com',
+            $this->anything(),
+            ['entryUUID', 'uid'],
+        )->willReturn($entry);
 
         $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret', 'remember' => '1']);
 
@@ -108,6 +116,7 @@ final class LDAPLoginTest extends DatabaseTestCase
         $this->assertInstanceOf(User::class, $user);
         $this->assertSame('directory-user', $user->username);
         $this->assertNull($user->getEmailIdentity());
+        $this->assertNull((new LDAPUserResolver(model(UserModel::class)))->getContactEmail($user, 'example'));
         $this->seeInDatabase($this->tables['logins'], ['user_id' => $user->id, 'success' => 1]);
         $this->dontSeeInDatabase($this->tables['remember_tokens'], ['user_id' => $user->id]);
         $this->assertNull(session('_ci_old_input'));
@@ -157,28 +166,31 @@ final class LDAPLoginTest extends DatabaseTestCase
     public function testSignsInWithoutSynchronizingGroupsOrProfiles(bool $provisionUsers): void
     {
         $this->ldap->connections['example'] = [
-            'groupMappings'      => ['developer' => 'cn=developers,dc=example,dc=com'],
-            'provisionUsers'     => $provisionUsers,
-            'syncGroupsOnLogin'  => false,
-            'syncProfileOnLogin' => false,
+            'groupMappings'         => ['developer' => 'cn=developers,dc=example,dc=com'],
+            'provisionUsers'        => $provisionUsers,
+            'syncGroupsOnLogin'     => false,
+            'syncProfileOnLogin'    => false,
+            'contactEmailAttribute' => 'mail',
         ] + $this->ldap->connections['example'];
         $resolver = new LDAPUserResolver(model(UserModel::class));
         $resolver->link('example', 'stable-id', $this->user->id);
-        $resolver->resolve('example', 'stable-id', groups: ['developer']);
+        $resolver->resolve('example', 'stable-id', groups: ['developer'], contactEmail: new LDAPContactEmail('previous@example.test'));
 
-        $entry                      = $this->entry();
-        $entry['attributes']['uid'] = ['directory-user', 'another-name'];
+        $entry                       = $this->entry();
+        $entry['attributes']['uid']  = ['directory-user', 'another-name'];
+        $entry['attributes']['mail'] = ['updated@example.test'];
         $this->directory->expects($this->once())->method('authenticate')->with(
             $this->isInstanceOf(LDAPConnection::class),
             'dc=example,dc=com',
             $this->anything(),
-            $provisionUsers ? ['entryUUID', 'uid'] : ['entryUUID'],
+            $provisionUsers ? ['entryUUID', 'uid', 'mail'] : ['entryUUID'],
         )->willReturn($entry);
 
         $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
 
         $response->assertSessionMissing('error');
         $this->assertSame('local-user', auth('session')->user()?->username);
+        $this->assertSame('previous@example.test', $resolver->getContactEmail($this->user, 'example'));
         $this->seeInDatabase($this->tables['groups_users'], ['user_id' => $this->user->id, 'group' => 'developer']);
     }
 
@@ -195,12 +207,15 @@ final class LDAPLoginTest extends DatabaseTestCase
     public function testProvisionsNewUserWithLoginSynchronizationDisabled(): void
     {
         $this->ldap->connections['example'] = [
-            'groupMappings'      => ['developer' => 'cn=developers,dc=example,dc=com'],
-            'syncGroupsOnLogin'  => false,
-            'syncProfileOnLogin' => false,
+            'groupMappings'         => ['developer' => 'cn=developers,dc=example,dc=com'],
+            'syncGroupsOnLogin'     => false,
+            'syncProfileOnLogin'    => false,
+            'contactEmailAttribute' => 'MAIL',
         ] + $this->ldap->connections['example'];
+        $entry                       = $this->entry();
+        $entry['attributes']['mail'] = ['Contact@example.test'];
         $this->directory->expects($this->once())->method('authenticate')->willReturn(
-            $this->entry() + ['matchedGroups' => ['developer']],
+            $entry + ['matchedGroups' => ['developer']],
         );
 
         $response = $this->post('/login', ['username' => 'directory-user', 'password' => 'directory-secret']);
@@ -209,6 +224,8 @@ final class LDAPLoginTest extends DatabaseTestCase
         $user = auth('session')->user();
         $this->assertInstanceOf(User::class, $user);
         $this->assertSame('directory-user', $user->username);
+        $this->assertSame('Contact@example.test', (new LDAPUserResolver(model(UserModel::class)))->getContactEmail($user, 'example'));
+        $this->assertNull($user->getEmailIdentity());
         $this->assertTrue($user->inGroup('user'));
         $this->assertFalse($user->inGroup('developer'));
     }
@@ -243,6 +260,45 @@ final class LDAPLoginTest extends DatabaseTestCase
         yield 'only profiles' => [false, true];
 
         yield 'only groups' => [true, false];
+    }
+
+    /**
+     * @param list<string> $values
+     */
+    #[DataProvider('provideClearsUnusableDirectoryContactsAfterVerification')]
+    public function testClearsUnusableDirectoryContactsAfterVerification(array $values): void
+    {
+        $this->ldap->connections['example']['contactEmailAttribute'] = 'mail';
+        $users                                                       = model(UserModel::class);
+        $resolver                                                    = new LDAPUserResolver($users);
+        $resolver->link('example', 'stable-id', $this->user->id);
+        $resolver->resolve('example', 'stable-id', contactEmail: new LDAPContactEmail('previous@example.test'));
+
+        $entry                       = $this->entry('local-user');
+        $entry['attributes']['mail'] = $values;
+        $this->directory->expects($this->exactly(2))->method('authenticate')->willReturnOnConsecutiveCalls(
+            $this->throwException(new LDAPException('incomplete_search')),
+            $entry,
+        );
+
+        $ldap        = new LDAP($users, $this->ldap, $this->directory);
+        $credentials = ['username' => 'directory-user', 'password' => 'directory-secret'];
+        $this->assertFalse($ldap->check($credentials)->isOK());
+        $this->assertSame('previous@example.test', $resolver->getContactEmail($this->user, 'example'));
+        $this->assertTrue($ldap->check($credentials)->isOK());
+        $this->assertNull($resolver->getContactEmail($this->user, 'example'));
+    }
+
+    /**
+     * @return iterable<string, array{list<string>}>
+     */
+    public static function provideClearsUnusableDirectoryContactsAfterVerification(): iterable
+    {
+        yield 'missing' => [[]];
+
+        yield 'multiple' => [['first@example.test', 'second@example.test']];
+
+        yield 'invalid' => [["first@example.test\n"]];
     }
 
     public function testDirectoryChecksRevokeOnlyLdapOwnedGroupsForALinkedUser(): void

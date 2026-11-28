@@ -196,7 +196,7 @@ final class NativeLDAPDirectory implements MultiBaseLDAPDirectoryInterface, LDAP
             $filter     = LDAPFilter::all($connection->loginFilter, $connection->eligibilityFilter);
             $attributes = [$connection->externalIdAttribute];
             if (! $groupsOnly) {
-                $attributes = array_values(array_unique([...$attributes, ...array_values($connection->profileAttributes)]));
+                $attributes = array_values(array_unique([...$attributes, ...$connection->profileAttributeNames()]));
             }
             $this->validateSearch($baseDn, $filter, $attributes);
 

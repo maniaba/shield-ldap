@@ -15,6 +15,7 @@ php spark shield:ldap-sync corporate --apply
 | `provisionUsers` | Set to `true` to create Shield accounts for eligible directory entries with no existing link. New users receive Shield’s configured default group. |
 | `updateProfile` | Set to `true` to apply mappings to existing linked accounts. Mappings also apply when creating accounts. |
 | `profileAttributes` | Maps writable Shield fields to LDAP attributes. Map `username` when provisioning users. |
+| `contactEmailAttribute` | Reads the optional [directory contact](../guides/user_management.md#directory-contact-email). A contact change is included in the preview and written with `--apply`. |
 
 Synchronization matches existing links by immutable directory identifier and
 skips reserved local accounts. If an existing Shield username conflicts with
@@ -39,7 +40,7 @@ users already processed. Deleted or disabled directory accounts keep their
 current local status. Review and update their Shield access through your
 application’s offboarding process.
 
-The command stages mapped profile values in memory up to PHP’s
+The command stages mapped profile and contact values in memory up to PHP’s
 `php://temp` threshold of 2 MiB. Larger scans can spill into PHP’s system
 temporary directory. Use a restricted temporary directory on the host when
 processing sensitive profile attributes.

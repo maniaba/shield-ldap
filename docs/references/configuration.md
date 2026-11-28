@@ -37,6 +37,7 @@ is called. Use `connectionIds()` to list configured IDs.
 | `loginAttributes` | `['uid']` | List of 1 to 10 LDAP attributes accepted as a login identifier. The directory evaluates equality using its schema rules. |
 | `externalIdAttribute` | `'entryUUID'` | Immutable, single-valued LDAP attribute used to link the Shield user. Use `objectGUID` for Active Directory. |
 | `profileAttributes` | `[]` | Map of writable Shield user fields to single-valued directory attributes. Map `username` when provisioning users. |
+| `contactEmailAttribute` | `null` | Optional LDAP attribute, such as `mail`, for a contact tied to this connection's LDAP link. See [Directory Contact Email](../guides/user_management.md#directory-contact-email). |
 | `groupMappings` | `null` | Map from existing Shield group keys to full LDAP group DNs on this connection. An empty array withdraws prior grants when group synchronization runs. `null` disables group management. See [Map LDAP Groups to Shield Groups](../getting_started/configuration.md#map-ldap-groups-to-shield-groups). |
 | `syncGroupsOnLogin` | `true` | Checks mapped group membership and updates Shield grants during LDAP sign-in. Set to `false` to leave these updates to the group-only Spark command. |
 | `syncProfileOnLogin` | `true` | Allows mapped profile updates for existing Shield users during LDAP sign-in when `updateProfile` is enabled. Provisioning still uses mapped fields when enabled. The Spark command uses `updateProfile` independently. |

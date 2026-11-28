@@ -60,6 +60,7 @@ final readonly class LDAPConnection
         public ?array $groupMappings = null,
         public bool $syncGroupsOnLogin = true,
         public bool $syncProfileOnLogin = true,
+        public ?string $contactEmailAttribute = null,
     ) {
         $mappings = $groupMappings ?? [];
 
@@ -101,7 +102,7 @@ final readonly class LDAPConnection
         LDAPFilter::validate($loginFilter);
         LDAPFilter::validate($eligibilityFilter);
 
-        foreach ([$externalIdAttribute, ...$loginAttributes, ...array_values($profileAttributes)] as $attribute) {
+        foreach ([$externalIdAttribute, ...$loginAttributes, ...$this->profileAttributeNames()] as $attribute) {
             LDAPFilter::validateAttribute($attribute);
         }
 
@@ -113,6 +114,19 @@ final readonly class LDAPConnection
 
         // A closure keeps the secret out of JSON, var_export(), and serialization.
         $this->readBindPassword = static fn (): string => $bindPassword;
+    }
+
+    /**
+     * @return list<string> Directory attributes for profile data and the optional contact.
+     */
+    public function profileAttributeNames(): array
+    {
+        $attributes = array_values($this->profileAttributes);
+        if ($this->contactEmailAttribute !== null) {
+            $attributes[] = $this->contactEmailAttribute;
+        }
+
+        return $attributes;
     }
 
     /**
